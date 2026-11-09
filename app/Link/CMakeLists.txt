@@ -1,5 +1,5 @@
-# 链路对端：BT(蓝牙/AT 调试) 或 RPI(树莓派)
-# 切换方式：cmake -DLINK_PEER=RPI ... 重新配置
+# Link peer: BT (Bridge M*/S*) or RPI
+# Switch: cmake -DLINK_PEER=RPI ...
 set(LINK_PEER "BT" CACHE STRING "USART6 link peer: BT or RPI")
 set_property(CACHE LINK_PEER PROPERTY STRINGS BT RPI)
 
@@ -15,9 +15,7 @@ if(LINK_PEER STREQUAL "RPI")
     )
     target_compile_definitions(link INTERFACE LINK_PEER_RPI=1)
 else()
-    target_sources(link INTERFACE
-        ${CMAKE_CURRENT_SOURCE_DIR}/link_proto_debug.cpp
-    )
+    # BT: Link_GetProtocol() comes from app/Bridge (A-tier M*/S*)
     target_compile_definitions(link INTERFACE LINK_PEER_BT=1)
 endif()
 

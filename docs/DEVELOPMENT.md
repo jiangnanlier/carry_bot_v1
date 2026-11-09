@@ -9,7 +9,7 @@
 
 | 路径 | 角色 | 状态 |
 |---|---|---|
-| `CubeMx/carry_bot_v1` | **正式开发主线**（STM32F407IGH6） | Link 回显已通；电机/舵机/麦轮待移植 |
+| `CubeMx/carry_bot_v1` | **正式开发主线**（STM32F407IGH6） | Link+ZDT+Servo+Bridge A-tier（待合 main） |
 | `CubeMx/USART` | 蓝牙→Emm V5 成功案例（F103） | 可用但乱；命令见 `COMMANDS.md`；**只读参考** |
 | `CubeMx/I2C` | PCA9685 + 部分步进调参 | 夹爪/转盘调参参考 |
 | `VisionModule` | K230 扫任务二维码→HDMI | 语法过；未上板；待与主控 UART |
@@ -22,9 +22,9 @@
 ```
 手机/电脑蓝牙 9600 ──USART6──> carry_bot_v1 (F407 + FreeRTOS)
                                  ├─ app/Link     上位机链路（已有）
-                                 ├─ app/Bridge   字符命令 → 业务（待建）
-                                 ├─ app/ZDT      USART1 → Emm V5 电机总线（待建）
-                                 ├─ app/Servo    I2C1 → PCA9685 夹爪/转盘（待建）
+                                 ├─ app/Bridge   字符命令 → 业务（A-tier 已实现）
+                                 ├─ app/ZDT      USART1 → Emm V5 电机总线（已实现）
+                                 ├─ app/Servo    I2C1 → PCA9685 夹爪/转盘（已实现）
                                  └─ app/Motion   麦轮运动学（待建）
 K230 VisionModule ──(另开 UART，勿占 USART1/6)──> 主控（待定）
 ```
@@ -94,6 +94,42 @@ K230 VisionModule ──(另开 UART，勿占 USART1/6)──> 主控（待定�
 
 协作约定：改代码前先在对应 feature 分支；阻塞写清「现象 / 已试 / 需要什么」。
 
+
+
+## 7b. Bridge A-tier（`feature/bridge-bt-commands`）
+
+`LINK_PEER=BT` 时，`app/Bridge` 作为 `LinkProtocol` 跑在 `linkTask` 内：按 `\r`/`\n` 切行，解析 `M*`/`S*`，调用 `Zdt_*` / `Servo_*`。
+
+| 命令 | 行为 |
+|------|------|
+| `M?` | 帮助/探活 |
+| `M[n]E0` / `M[n]E1` | 失能/使能（`n` 可省=缺省地址 2；`*`/`0`=广播） |
+| `M[n]G[+|-]<deg>` | 按角度相对运动 |
+| `M[n]X` | 立即停 |
+| `MS[n]` / `M[n]S` | 设缺省地址 |
+| `ML` | 列出 Bridge 侧槽位摘要 |
+| `M[n]J` | 本地槽位状态（dir/vel/acc/last_deg） |
+| `S?` / `SH` | 舵机帮助 |
+| `S0U1000` / `S0U1500` | 夹爪关闭/打开（软件钳 1000–1500） |
+| `S1U<us>` | 转盘绝对脉宽（硬件钳 200–2800） |
+| `S0C` / `S0O` / `S1M` | 夹住 / 打开 / 转盘中位 |
+
+B/C 档（`MV`/`MQ`/麦轮 `MFW`/`X:Y:`/摆动等）回 `ERR not implemented`。
+
+冒烟（SerialTest / 蓝牙 9600）：
+
+```text
+M?
+M1E1
+M1G+10
+M1X
+S0U1500
+S0U1000
+S1U1500
+```
+
+本分支已 merge `feature/zdt-motor-bus` + `feature/servo-pca9685` 以便链接；上板验证后再合 main。
+
 ## 7. 本地构建（carry_bot_v1）
 
 ```powershell
@@ -105,4 +141,4 @@ cd D:\GithubWork\Intelligent_Logistics_Handling\CubeMx\carry_bot_v1
 
 ---
 
-变更记录：2026-11-09 初版（读完 docs / USART / carry_bot / Vision 后建立分支与协作）。
+变更记录：2026-11-09 初版（读完 docs / USART / carry_bot / Vision 后建立分支与协作）。- 2026-11-09 Bridge A-tier：`app/Bridge` + merge ZDT/Servo；BT 不再回显。

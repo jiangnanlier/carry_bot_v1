@@ -11,6 +11,9 @@
 #include "board_key.h"
 #include "cmsis_os.h"
 
+volatile uint8_t g_board_led_mode;
+volatile uint8_t g_board_key;
+
 void StartBoardTask(void *argument)
 {
   uint32_t tick = 0;
@@ -24,7 +27,10 @@ void StartBoardTask(void *argument)
       mode = (uint8_t)((mode + 1u) % 4u);
     }
 
-    if (BoardKey_IsPressed()) {
+    g_board_led_mode = mode;
+    g_board_key = BoardKey_IsPressed() ? 1u : 0u;
+
+    if (g_board_key != 0u) {
       BoardLed_WriteRgb(true, false, false);
     } else if (mode == 0u) {
       BoardLed_WriteRgb(false, ((tick / 50u) & 1u) != 0u, false); /* 10ms * 50 = 500ms */

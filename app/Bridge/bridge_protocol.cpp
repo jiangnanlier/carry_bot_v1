@@ -213,6 +213,11 @@ private:
     const char *p = skip_ws(line);
     if (*p == '\0') return;
 
+    if (eq_ci(p, "test1m"))
+    {
+      handle_test_1m();
+      return;
+    }
     if (eq_ci(p, "test"))
     {
       handle_test_fwd();
@@ -230,7 +235,7 @@ private:
       handle_servo(p + 1);
       return;
     }
-    append_line("ERR unknown, send M? or SH or test");
+    append_line("ERR unknown, send M? or SH or test/test1m");
   }
 
   void flush_reply()
@@ -251,6 +256,121 @@ private:
       case HAL_BUSY:    return "BUSY";
       default:          return "FAIL";
     }
+  }
+
+
+  void handle_test_1m()
+  {
+    /* Forward ~1 m: enable -> GoDeg(+deg) on FL/RL/FR/RR -> wait travel -> stop/disable.
+     * Wheel dir polarity from zdt_dir_map.h so +deg is vehicle-forward. */
+    static const uint8_t kWheels[] = {
+      ZDT_ADDR_WHEEL_FL, ZDT_ADDR_WHEEL_RL,
+      ZDT_ADDR_WHEEL_FR, ZDT_ADDR_WHEEL_RR
+    };
+    const uint32_t tmo = ZDT_ACK_TIMEOUT_MS;
+    const TickType_t gap = pdMS_TO_TICKS(BRIDGE_TEST_GAP_MS);
+    const float diam = BRIDGE_WHEEL_DIAMETER_MM;
+    const float gear = BRIDGE_WHEEL_GEAR_RATIO;
+    const float dist = BRIDGE_TEST1M_DIST_MM;
+    const float circ = 3.14159265f * diam;
+    int32_t deg = 0;
+    uint32_t travel_ms = 3000U;
+    char rxhex[48];
+    uint8_t fail_en = 0U;
+    uint8_t fail_go = 0U;
+    uint8_t fail_stop = 0U;
+    uint8_t fail_dis = 0U;
+
+    if (circ > 1.0f)
+    {
+      deg = static_cast<int32_t>((360.0f * dist * gear) / circ + 0.5f);
+    }
+    if (deg < 1) deg = 1;
+
+    {
+      const float rpm = static_cast<float>(ZDT_DEFAULT_VEL_RPM);
+      const float revs = static_cast<float>(deg) / 360.0f;
+      float sec = (rpm > 1.0f) ? (revs * 60.0f / rpm) : 3.0f;
+      sec = sec * 2.5f + 1.0f;
+      if (sec < 2.0f) sec = 2.0f;
+      if (sec > 30.0f) sec = 30.0f;
+      travel_ms = static_cast<uint32_t>(sec * 1000.0f + 0.5f);
+    }
+
+    reply_fmt("TEST1M dist=%.0fmm diam=%.0fmm gear=%.2f deg=%ld wait=%lums (ASSUME; edit bridge_config)",
+              static_cast<double>(dist), static_cast<double>(diam),
+              static_cast<double>(gear), static_cast<long>(deg),
+              static_cast<unsigned long>(travel_ms));
+    flush_reply();
+
+    for (uint8_t i = 0U; i < 4U; ++i)
+    {
+      const uint8_t addr = kWheels[i];
+      const HAL_StatusTypeDef st = Zdt_EnableAndWait(addr, 1U, tmo);
+      (void)Zdt_FormatLastRx(rxhex, sizeof(rxhex));
+      reply_fmt("E a=%u %s rx=%s", static_cast<unsigned>(addr), ack_tag(st), rxhex);
+      flush_reply();
+      if (st != HAL_OK) fail_en = static_cast<uint8_t>(fail_en | (1U << i));
+      vTaskDelay(gap);
+    }
+
+    for (uint8_t i = 0U; i < 4U; ++i)
+    {
+      const uint8_t addr = kWheels[i];
+      const HAL_StatusTypeDef st = Zdt_GoDegAndWait(addr, deg, tmo);
+      (void)Zdt_FormatLastRx(rxhex, sizeof(rxhex));
+      reply_fmt("G a=%u deg=%ld %s rx=%s", static_cast<unsigned>(addr),
+                static_cast<long>(deg), ack_tag(st), rxhex);
+      flush_reply();
+      if (st != HAL_OK) fail_go = static_cast<uint8_t>(fail_go | (1U << i));
+      vTaskDelay(gap);
+    }
+
+    if (fail_en != 0U || fail_go != 0U)
+    {
+      for (uint8_t i = 0U; i < 4U; ++i)
+      {
+        (void)Zdt_Stop(kWheels[i]);
+        vTaskDelay(gap);
+      }
+      reply_fmt("ERR TEST1M en=0x%02X go=0x%02X",
+                static_cast<unsigned>(fail_en), static_cast<unsigned>(fail_go));
+      return;
+    }
+
+    reply_fmt("TEST1M moving wait=%lums", static_cast<unsigned long>(travel_ms));
+    flush_reply();
+    vTaskDelay(pdMS_TO_TICKS(travel_ms));
+
+    for (uint8_t i = 0U; i < 4U; ++i)
+    {
+      const uint8_t addr = kWheels[i];
+      const HAL_StatusTypeDef st = Zdt_StopAndWait(addr, tmo);
+      (void)Zdt_FormatLastRx(rxhex, sizeof(rxhex));
+      reply_fmt("X a=%u %s rx=%s", static_cast<unsigned>(addr), ack_tag(st), rxhex);
+      flush_reply();
+      if (st != HAL_OK) fail_stop = static_cast<uint8_t>(fail_stop | (1U << i));
+      vTaskDelay(gap);
+    }
+
+    for (uint8_t i = 0U; i < 4U; ++i)
+    {
+      const uint8_t addr = kWheels[i];
+      const HAL_StatusTypeDef st = Zdt_EnableAndWait(addr, 0U, tmo);
+      (void)Zdt_FormatLastRx(rxhex, sizeof(rxhex));
+      reply_fmt("D a=%u %s rx=%s", static_cast<unsigned>(addr), ack_tag(st), rxhex);
+      flush_reply();
+      if (st != HAL_OK) fail_dis = static_cast<uint8_t>(fail_dis | (1U << i));
+      vTaskDelay(gap);
+    }
+
+    if (fail_stop != 0U || fail_dis != 0U)
+    {
+      reply_fmt("ERR TEST1M ran stop=0x%02X dis=0x%02X",
+                static_cast<unsigned>(fail_stop), static_cast<unsigned>(fail_dis));
+      return;
+    }
+    append_line("OK TEST1M fwd~1m ack=ok");
   }
 
   void handle_test_fwd()
@@ -356,7 +476,7 @@ private:
 
     if (*p == '?' || to_upper(*p) == 'H')
     {
-      append_line("OK A-tier: M? ME0/1 MG[+|-]deg MX MS[n] ML MJ S? S0U/S1U S0C/S0O/S1M test");
+      append_line("OK A-tier: M? ME0/1 MG[+|-]deg MX MS[n] ML MJ S? ... test test1m");
       append_line("addr 1=lift 2=turn 3-6=wheels *=bcast default=2");
       return;
     }

@@ -1,3 +1,51 @@
-build
+# Build outputs
+/build/
+cmake-build-*/
+out/
+Debug/
+Release/
+
+# CMake / Ninja
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+.ninja_deps
+.ninja_log
+build.ninja
+
+# CubeMX scratch / backups
 mx.scratch
+*.bak
+*.ioc.bak
+*.mxproject.bak
+
+# Toolchain / binary artifacts
+*.o
+*.d
+*.su
+*.elf
+*.bin
+*.hex
+*.map
+*.list
+*.a
+*.la
+*.lo
+
+# IDE local noise (shared .vscode / .settings stay tracked)
+*.user
+*.suo
+*.opendb
+*.db
+*.vcxproj.user
+.idea/
+
+# OS junk
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Keep CubeIDE settings directory if present
 !.settings

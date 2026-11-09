@@ -1,0 +1,44 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  hygiene:
+    name: hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fail if build artifacts are tracked
+        run: |
+          set -euo pipefail
+          bad=$(git ls-files 'build/**' '*.elf' '*.bin' '*.hex' '*.o' '*.map' || true)
+          if [ -n "$bad" ]; then
+            echo "Tracked build/binary junk:" >&2
+            echo "$bad" >&2
+            exit 1
+          fi
+          test -f CMakeLists.txt
+          test -f cmake/gcc-arm-none-eabi.cmake
+
+  cmake-configure:
+    name: cmake-configure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install arm-none-eabi toolchain and Ninja
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi binutils-arm-none-eabi cmake ninja-build
+          arm-none-eabi-gcc --version
+          cmake --version
+      - name: Configure Debug preset
+        run: cmake --preset Debug
+      - name: Build Debug
+        run: cmake --build --preset Debug

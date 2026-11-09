@@ -1,4 +1,5 @@
 #include "bridge_config.h"
+#include "link_public.h"
 #include "link_protocol.h"
 #include "zdt_public.h"
 #include "zdt_config.h"
@@ -232,63 +233,116 @@ private:
     append_line("ERR unknown, send M? or SH or test");
   }
 
+  void flush_reply()
+  {
+    if (reply_len_ == 0U) return;
+    (void)Link_Send(reply_, reply_len_);
+    /* USART6 @9600: ~1ms/byte; short lines + margin before next TX */
+    vTaskDelay(pdMS_TO_TICKS(40U + reply_len_ / 2U));
+    reply_len_ = 0U;
+  }
+
+  const char *ack_tag(HAL_StatusTypeDef st)
+  {
+    switch (st)
+    {
+      case HAL_OK:      return "ACK";
+      case HAL_TIMEOUT: return "TIMEOUT";
+      case HAL_BUSY:    return "BUSY";
+      default:          return "FAIL";
+    }
+  }
+
   void handle_test_fwd()
   {
     /* Four mecanum wheels, same dir/vel for ~2s then stop.
-     * Assumption (no kinematics yet): identical Emm dir=BRIDGE_TEST_DIR on
-     * addr 3/4/5/6. If chassis crawls sideways/backwards, flip dir or per-wheel signs later. */
+     * Streams per-step USART1 TX/ACK/RX debug on USART6; final OK/ERR in reply. */
     static const uint8_t kWheels[] = {
       ZDT_ADDR_WHEEL_FL, ZDT_ADDR_WHEEL_RL,
       ZDT_ADDR_WHEEL_FR, ZDT_ADDR_WHEEL_RR
     };
     const uint8_t dir = static_cast<uint8_t>(BRIDGE_TEST_DIR);
     const uint16_t vel = static_cast<uint16_t>(BRIDGE_TEST_VEL_RPM);
+    const uint32_t tmo = ZDT_ACK_TIMEOUT_MS;
     const TickType_t gap = pdMS_TO_TICKS(BRIDGE_TEST_GAP_MS);
+    char rxhex[48];
+    uint8_t fail_en = 0U;
+    uint8_t fail_vel = 0U;
+    uint8_t fail_stop = 0U;
+    uint8_t fail_dis = 0U;
+
+    reply_fmt("TEST start addr=3-6 dir=%u vel=%u tmo=%lu",
+              static_cast<unsigned>(dir), static_cast<unsigned>(vel),
+              static_cast<unsigned long>(tmo));
+    flush_reply();
 
     for (uint8_t i = 0U; i < 4U; ++i)
     {
-      const HAL_StatusTypeDef st = Zdt_Enable(kWheels[i], 1U);
-      if (st != HAL_OK)
-      {
-        reply_fmt("ERR TEST enable addr=%u %s", static_cast<unsigned>(kWheels[i]),
-                  hal_err(st));
-        return;
-      }
+      const uint8_t addr = kWheels[i];
+      const HAL_StatusTypeDef st = Zdt_EnableAndWait(addr, 1U, tmo);
+      (void)Zdt_FormatLastRx(rxhex, sizeof(rxhex));
+      reply_fmt("E a=%u %s rx=%s", static_cast<unsigned>(addr), ack_tag(st), rxhex);
+      flush_reply();
+      if (st != HAL_OK) fail_en = static_cast<uint8_t>(fail_en | (1U << i));
       vTaskDelay(gap);
     }
 
     for (uint8_t i = 0U; i < 4U; ++i)
     {
-      const HAL_StatusTypeDef st = Zdt_Vel(kWheels[i], dir, vel);
-      if (st != HAL_OK)
-      {
-        for (uint8_t j = 0U; j < 4U; ++j)
-        {
-          (void)Zdt_Stop(kWheels[j]);
-          vTaskDelay(gap);
-        }
-        reply_fmt("ERR TEST vel addr=%u %s", static_cast<unsigned>(kWheels[i]),
-                  hal_err(st));
-        return;
-      }
+      const uint8_t addr = kWheels[i];
+      const HAL_StatusTypeDef st = Zdt_VelAndWait(addr, dir, vel, tmo);
+      (void)Zdt_FormatLastRx(rxhex, sizeof(rxhex));
+      reply_fmt("V a=%u %s rx=%s", static_cast<unsigned>(addr), ack_tag(st), rxhex);
+      flush_reply();
+      if (st != HAL_OK) fail_vel = static_cast<uint8_t>(fail_vel | (1U << i));
       vTaskDelay(gap);
     }
 
-    /* Blocks linkTask ~2s; OK after stop. Acceptable for smoke only. */
+    if (fail_en != 0U || fail_vel != 0U)
+    {
+      /* Still attempt stop so a half-started wheel does not free-run. */
+      for (uint8_t i = 0U; i < 4U; ++i)
+      {
+        (void)Zdt_Stop(kWheels[i]);
+        vTaskDelay(gap);
+      }
+      reply_fmt("ERR TEST en=0x%02X vel=0x%02X (bit0=FL..bit3=RR; TIMEOUT=无USART1 ACK)",
+                static_cast<unsigned>(fail_en), static_cast<unsigned>(fail_vel));
+      return;
+    }
+
     vTaskDelay(pdMS_TO_TICKS(BRIDGE_TEST_MS));
 
     for (uint8_t i = 0U; i < 4U; ++i)
     {
-      (void)Zdt_Stop(kWheels[i]);
-      vTaskDelay(gap);
-    }
-    for (uint8_t i = 0U; i < 4U; ++i)
-    {
-      (void)Zdt_Enable(kWheels[i], 0U);
+      const uint8_t addr = kWheels[i];
+      const HAL_StatusTypeDef st = Zdt_StopAndWait(addr, tmo);
+      (void)Zdt_FormatLastRx(rxhex, sizeof(rxhex));
+      reply_fmt("X a=%u %s rx=%s", static_cast<unsigned>(addr), ack_tag(st), rxhex);
+      flush_reply();
+      if (st != HAL_OK) fail_stop = static_cast<uint8_t>(fail_stop | (1U << i));
       vTaskDelay(gap);
     }
 
-    append_line("OK TEST fwd 2s");
+    for (uint8_t i = 0U; i < 4U; ++i)
+    {
+      const uint8_t addr = kWheels[i];
+      const HAL_StatusTypeDef st = Zdt_EnableAndWait(addr, 0U, tmo);
+      (void)Zdt_FormatLastRx(rxhex, sizeof(rxhex));
+      reply_fmt("D a=%u %s rx=%s", static_cast<unsigned>(addr), ack_tag(st), rxhex);
+      flush_reply();
+      if (st != HAL_OK) fail_dis = static_cast<uint8_t>(fail_dis | (1U << i));
+      vTaskDelay(gap);
+    }
+
+    if (fail_stop != 0U || fail_dis != 0U)
+    {
+      reply_fmt("ERR TEST ran but stop=0x%02X dis=0x%02X",
+                static_cast<unsigned>(fail_stop), static_cast<unsigned>(fail_dis));
+      return;
+    }
+
+    append_line("OK TEST fwd 2s ack=ok");
   }
 
   void handle_motor(const char *p)

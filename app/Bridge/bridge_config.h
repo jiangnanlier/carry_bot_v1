@@ -17,5 +17,6 @@
 #define BRIDGE_TEST_VEL_RPM       60U
 #define BRIDGE_TEST_DIR           1U
 #define BRIDGE_TEST_GAP_MS        20U
+/* test streams debug lines via Link_Send; final OK/ERR stays in reply buf */
 
 #endif /* __BRIDGE_CONFIG_H */

@@ -297,9 +297,10 @@ private:
       travel_ms = static_cast<uint32_t>(sec * 1000.0f + 0.5f);
     }
 
-    reply_fmt("TEST1M dist=%.0fmm diam=%.0fmm gear=%.2f deg=%ld wait=%lums (ASSUME; edit bridge_config)",
-              static_cast<double>(dist), static_cast<double>(diam),
-              static_cast<double>(gear), static_cast<long>(deg),
+    /* nano.specs: no float printf — print assumed geometry as integers */
+    reply_fmt("TEST1M dist=%ldmm diam=%ldmm gear=%ld/100 deg=%ld wait=%lums (ASSUME; edit bridge_config)",
+              static_cast<long>(dist + 0.5f), static_cast<long>(diam + 0.5f),
+              static_cast<long>(gear * 100.0f + 0.5f), static_cast<long>(deg),
               static_cast<unsigned long>(travel_ms));
     flush_reply();
 

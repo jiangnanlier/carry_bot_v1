@@ -3,6 +3,7 @@
 #include "link_protocol.h"
 #include "zdt_public.h"
 #include "zdt_config.h"
+#include "motor_dump.h"
 #include "servo_public.h"
 #include "servo_config.h"
 
@@ -212,6 +213,7 @@ private:
   {
     const char *p = skip_ws(line);
     if (*p == '\0') return;
+    MotorDump_Printf("CMD %s", p);
 
     if (eq_ci(p, "test"))
     {
@@ -236,6 +238,23 @@ private:
   void flush_reply()
   {
     if (reply_len_ == 0U) return;
+    /* Mirror Bridge reply lines to 串口2 dump (split on CR/LF). */
+    {
+      uint16_t i = 0U;
+      while (i < reply_len_)
+      {
+        while (i < reply_len_ && (reply_[i] == '\r' || reply_[i] == '\n')) ++i;
+        if (i >= reply_len_) break;
+        uint16_t j = i;
+        while (j < reply_len_ && reply_[j] != '\r' && reply_[j] != '\n') ++j;
+        char tmp[160];
+        const uint16_t n = static_cast<uint16_t>((j - i) < sizeof(tmp) - 1U ? (j - i) : sizeof(tmp) - 1U);
+        std::memcpy(tmp, &reply_[i], n);
+        tmp[n] = '\0';
+        MotorDump_Printf("RSP %s", tmp);
+        i = j;
+      }
+    }
     (void)Link_Send(reply_, reply_len_);
     /* USART6 @9600: ~1ms/byte; short lines + margin before next TX */
     vTaskDelay(pdMS_TO_TICKS(40U + reply_len_ / 2U));

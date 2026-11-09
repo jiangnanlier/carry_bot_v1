@@ -1,6 +1,7 @@
 #include "zdt_public.h"
 #include "zdt_config.h"
 #include "zdt_protocol.h"
+#include "zdt_dir_map.h"
 #include "usart.h"
 #include "FreeRTOS.h"
 #include "queue.h"
@@ -149,6 +150,7 @@ extern "C" HAL_StatusTypeDef Zdt_Stop(uint8_t addr)
 extern "C" HAL_StatusTypeDef Zdt_Vel(uint8_t addr, uint8_t dir, uint16_t vel_rpm)
 {
   ZdtSlot *s = slot_find(addr);
+  dir = Zdt_ApplyDirBit(addr, dir);
   s->dir = dir ? 1U : 0U;
   s->vel = vel_rpm;
   if (addr != ZDT_ADDR_BROADCAST) s->addr = addr;
@@ -167,6 +169,8 @@ extern "C" HAL_StatusTypeDef Zdt_GoDeg(uint8_t addr, int32_t deg)
   ZdtSlot *s = slot_find(addr);
   uint8_t up;
   uint32_t abs_deg;
+
+  deg = Zdt_ApplyDirDeg(addr, deg);
 
   if (deg < 0)
   {

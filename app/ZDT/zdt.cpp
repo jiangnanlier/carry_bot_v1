@@ -1,7 +1,6 @@
 #include "zdt_public.h"
 #include "zdt_config.h"
 #include "zdt_protocol.h"
-#include "motor_dump.h"
 #include "usart.h"
 #include "FreeRTOS.h"
 #include "queue.h"
@@ -90,18 +89,11 @@ ZdtSlot *slot_find(uint8_t addr)
 HAL_StatusTypeDef send_frame(const uint8_t *data, uint16_t len)
 {
   if (data == nullptr || len == 0U || len > static_cast<uint16_t>(sizeof(zdt_tx_buf))) return HAL_ERROR;
-  /* Enqueue TX hex only — never block UART before binary Emm frame. */
-  MotorDump_TxHex(data, len);
-  if (MotorDump_PrepareBinaryTx() != HAL_OK) return HAL_BUSY;
-  if (huart1.hdmatx == nullptr)
-  {
-    MotorDump_FinishBinaryTx();
-    return HAL_ERROR;
-  }
+  if (huart1.gState != HAL_UART_STATE_READY) return HAL_BUSY;
+  if (huart1.hdmatx == nullptr) return HAL_ERROR;
+  if ((huart1.hdmatx->Instance->CR & DMA_SxCR_EN) != 0U) return HAL_BUSY;
   std::memcpy(zdt_tx_buf, data, len);
-  const HAL_StatusTypeDef st = HAL_UART_Transmit_DMA(&huart1, zdt_tx_buf, len);
-  MotorDump_FinishBinaryTx();
-  return st;
+  return HAL_UART_Transmit_DMA(&huart1, zdt_tx_buf, len);
 }
 
 void note_ack_from_frame(const ZdtFrame &frame)
@@ -138,7 +130,6 @@ extern "C" HAL_StatusTypeDef Zdt_SendRaw(const uint8_t *data, uint16_t len)
 
 extern "C" HAL_StatusTypeDef Zdt_Enable(uint8_t addr, uint8_t on)
 {
-  MotorDump_Printf("cmd EN a=%u on=%u", static_cast<unsigned>(addr), static_cast<unsigned>(on));
   uint8_t f[6];
   ZdtSlot *s = slot_find(addr);
   const uint8_t n = ZdtProto_EncodeEnable(f, sizeof(f), addr, on, s->snF);
@@ -148,7 +139,6 @@ extern "C" HAL_StatusTypeDef Zdt_Enable(uint8_t addr, uint8_t on)
 
 extern "C" HAL_StatusTypeDef Zdt_Stop(uint8_t addr)
 {
-  MotorDump_Printf("cmd STOP a=%u", static_cast<unsigned>(addr));
   uint8_t f[5];
   ZdtSlot *s = slot_find(addr);
   const uint8_t n = ZdtProto_EncodeStop(f, sizeof(f), addr, s->snF);
@@ -158,7 +148,6 @@ extern "C" HAL_StatusTypeDef Zdt_Stop(uint8_t addr)
 
 extern "C" HAL_StatusTypeDef Zdt_Vel(uint8_t addr, uint8_t dir, uint16_t vel_rpm)
 {
-  MotorDump_Printf("cmd VEL a=%u dir=%u rpm=%u", static_cast<unsigned>(addr), static_cast<unsigned>(dir), static_cast<unsigned>(vel_rpm));
   ZdtSlot *s = slot_find(addr);
   s->dir = dir ? 1U : 0U;
   s->vel = vel_rpm;
@@ -175,7 +164,6 @@ extern "C" HAL_StatusTypeDef Zdt_Vel(uint8_t addr, uint8_t dir, uint16_t vel_rpm
 
 extern "C" HAL_StatusTypeDef Zdt_GoDeg(uint8_t addr, int32_t deg)
 {
-  MotorDump_Printf("cmd POS a=%u deg=%ld", static_cast<unsigned>(addr), static_cast<long>(deg));
   ZdtSlot *s = slot_find(addr);
   uint8_t up;
   uint32_t abs_deg;
@@ -233,7 +221,6 @@ extern "C" HAL_StatusTypeDef Zdt_WaitAck(uint8_t addr, uint8_t cmd, uint32_t tim
   return (last_ack_ok != 0U) ? HAL_OK : HAL_ERROR;
 }
 
-
 extern "C" HAL_StatusTypeDef Zdt_EnableAndWait(uint8_t addr, uint8_t on, uint32_t timeout_ms)
 {
   if (zdt_ack_sem == nullptr) return HAL_ERROR;
@@ -243,39 +230,25 @@ extern "C" HAL_StatusTypeDef Zdt_EnableAndWait(uint8_t addr, uint8_t on, uint32_
   last_ack_ok = 0U;
   (void)xSemaphoreTake(zdt_ack_sem, 0);
 
-  MotorDump_Printf("EN a=%u on=%u", static_cast<unsigned>(addr), static_cast<unsigned>(on));
   const HAL_StatusTypeDef st = Zdt_Enable(addr, on);
   if (st != HAL_OK)
   {
     wait_addr = 0xFFU;
-    MotorDump_Printf("EN a=%u TX %s", static_cast<unsigned>(addr), (st == HAL_BUSY) ? "BUSY" : "FAIL");
     return st;
   }
   if (addr == ZDT_ADDR_BROADCAST)
   {
     wait_addr = 0xFFU;
-    MotorDump_Printf("EN a=0 bcast no-wait");
     return HAL_OK;
   }
   if (xSemaphoreTake(zdt_ack_sem, pdMS_TO_TICKS(timeout_ms)) != pdTRUE)
   {
     wait_addr = 0xFFU;
-    char rxhex[48];
-    (void)Zdt_FormatLastRx(rxhex, sizeof(rxhex));
-    MotorDump_Printf("EN a=%u TIMEOUT rx=%s", static_cast<unsigned>(addr), rxhex);
     return HAL_TIMEOUT;
   }
   wait_addr = 0xFFU;
-  {
-    char rxhex[48];
-    (void)Zdt_FormatLastRx(rxhex, sizeof(rxhex));
-    MotorDump_Printf("EN a=%u %s rx=%s", static_cast<unsigned>(addr),
-                     (last_ack_ok != 0U) ? "ACK" : "FAIL", rxhex);
-  }
   return (last_ack_ok != 0U) ? HAL_OK : HAL_ERROR;
 }
-
-
 
 extern "C" HAL_StatusTypeDef Zdt_GoDegAndWait(uint8_t addr, int32_t deg, uint32_t timeout_ms)
 {
@@ -285,38 +258,25 @@ extern "C" HAL_StatusTypeDef Zdt_GoDegAndWait(uint8_t addr, int32_t deg, uint32_
   last_ack_ok = 0U;
   (void)xSemaphoreTake(zdt_ack_sem, 0);
 
-  MotorDump_Printf("POS a=%u deg=%ld", static_cast<unsigned>(addr), static_cast<long>(deg));
   const HAL_StatusTypeDef st = Zdt_GoDeg(addr, deg);
   if (st != HAL_OK)
   {
     wait_addr = 0xFFU;
-    MotorDump_Printf("POS a=%u TX %s", static_cast<unsigned>(addr), (st == HAL_BUSY) ? "BUSY" : "FAIL");
     return st;
   }
   if (addr == ZDT_ADDR_BROADCAST || deg == 0)
   {
     wait_addr = 0xFFU;
-    MotorDump_Printf("POS a=%u skip-wait", static_cast<unsigned>(addr));
     return HAL_OK;
   }
   if (xSemaphoreTake(zdt_ack_sem, pdMS_TO_TICKS(timeout_ms)) != pdTRUE)
   {
     wait_addr = 0xFFU;
-    char rxhex[48];
-    (void)Zdt_FormatLastRx(rxhex, sizeof(rxhex));
-    MotorDump_Printf("POS a=%u TIMEOUT rx=%s", static_cast<unsigned>(addr), rxhex);
     return HAL_TIMEOUT;
   }
   wait_addr = 0xFFU;
-  {
-    char rxhex[48];
-    (void)Zdt_FormatLastRx(rxhex, sizeof(rxhex));
-    MotorDump_Printf("POS a=%u %s rx=%s", static_cast<unsigned>(addr),
-                     (last_ack_ok != 0U) ? "ACK" : "FAIL", rxhex);
-  }
   return (last_ack_ok != 0U) ? HAL_OK : HAL_ERROR;
 }
-
 
 extern "C" void Zdt_ClearLastRx(void)
 {
@@ -348,7 +308,6 @@ extern "C" uint16_t Zdt_FormatLastRx(char *out, uint16_t capacity)
   return pos;
 }
 
-
 extern "C" HAL_StatusTypeDef Zdt_VelAndWait(uint8_t addr, uint8_t dir, uint16_t vel_rpm, uint32_t timeout_ms)
 {
   if (zdt_ack_sem == nullptr) return HAL_ERROR;
@@ -358,40 +317,25 @@ extern "C" HAL_StatusTypeDef Zdt_VelAndWait(uint8_t addr, uint8_t dir, uint16_t 
   last_ack_ok = 0U;
   (void)xSemaphoreTake(zdt_ack_sem, 0);
 
-  MotorDump_Printf("VEL a=%u dir=%u rpm=%u", static_cast<unsigned>(addr),
-                   static_cast<unsigned>(dir), static_cast<unsigned>(vel_rpm));
   const HAL_StatusTypeDef st = Zdt_Vel(addr, dir, vel_rpm);
   if (st != HAL_OK)
   {
     wait_addr = 0xFFU;
-    MotorDump_Printf("VEL a=%u TX %s", static_cast<unsigned>(addr), (st == HAL_BUSY) ? "BUSY" : "FAIL");
     return st;
   }
   if (addr == ZDT_ADDR_BROADCAST)
   {
     wait_addr = 0xFFU;
-    MotorDump_Printf("VEL a=0 bcast no-wait");
     return HAL_OK;
   }
   if (xSemaphoreTake(zdt_ack_sem, pdMS_TO_TICKS(timeout_ms)) != pdTRUE)
   {
     wait_addr = 0xFFU;
-    char rxhex[48];
-    (void)Zdt_FormatLastRx(rxhex, sizeof(rxhex));
-    MotorDump_Printf("VEL a=%u TIMEOUT rx=%s", static_cast<unsigned>(addr), rxhex);
     return HAL_TIMEOUT;
   }
   wait_addr = 0xFFU;
-  {
-    char rxhex[48];
-    (void)Zdt_FormatLastRx(rxhex, sizeof(rxhex));
-    MotorDump_Printf("VEL a=%u %s rx=%s", static_cast<unsigned>(addr),
-                     (last_ack_ok != 0U) ? "ACK" : "FAIL", rxhex);
-  }
   return (last_ack_ok != 0U) ? HAL_OK : HAL_ERROR;
 }
-
-
 
 extern "C" HAL_StatusTypeDef Zdt_StopAndWait(uint8_t addr, uint32_t timeout_ms)
 {
@@ -402,38 +346,25 @@ extern "C" HAL_StatusTypeDef Zdt_StopAndWait(uint8_t addr, uint32_t timeout_ms)
   last_ack_ok = 0U;
   (void)xSemaphoreTake(zdt_ack_sem, 0);
 
-  MotorDump_Printf("STOP a=%u", static_cast<unsigned>(addr));
   const HAL_StatusTypeDef st = Zdt_Stop(addr);
   if (st != HAL_OK)
   {
     wait_addr = 0xFFU;
-    MotorDump_Printf("STOP a=%u TX %s", static_cast<unsigned>(addr), (st == HAL_BUSY) ? "BUSY" : "FAIL");
     return st;
   }
   if (addr == ZDT_ADDR_BROADCAST)
   {
     wait_addr = 0xFFU;
-    MotorDump_Printf("STOP a=0 bcast no-wait");
     return HAL_OK;
   }
   if (xSemaphoreTake(zdt_ack_sem, pdMS_TO_TICKS(timeout_ms)) != pdTRUE)
   {
     wait_addr = 0xFFU;
-    char rxhex[48];
-    (void)Zdt_FormatLastRx(rxhex, sizeof(rxhex));
-    MotorDump_Printf("STOP a=%u TIMEOUT rx=%s", static_cast<unsigned>(addr), rxhex);
     return HAL_TIMEOUT;
   }
   wait_addr = 0xFFU;
-  {
-    char rxhex[48];
-    (void)Zdt_FormatLastRx(rxhex, sizeof(rxhex));
-    MotorDump_Printf("STOP a=%u %s rx=%s", static_cast<unsigned>(addr),
-                     (last_ack_ok != 0U) ? "ACK" : "FAIL", rxhex);
-  }
   return (last_ack_ok != 0U) ? HAL_OK : HAL_ERROR;
 }
-
 
 extern "C" void StartZdtTask(void *argument)
 {
@@ -441,7 +372,6 @@ extern "C" void StartZdtTask(void *argument)
   slots_init();
   zdt_rx_queue = xQueueCreate(ZDT_QUEUE_LEN, sizeof(ZdtFrame));
   zdt_ack_sem = xSemaphoreCreateBinary();
-  MotorDump_Init();
 
   if (huart1.Init.BaudRate != ZDT_BAUDRATE)
   {
@@ -450,31 +380,20 @@ extern "C" void StartZdtTask(void *argument)
     (void)HAL_UART_Init(&huart1);
   }
   start_receive();
-  vTaskDelay(pdMS_TO_TICKS(50));
-  MotorDump_BootBanner();
 
 #if ZDT_SMOKE_ENABLE
+  vTaskDelay(pdMS_TO_TICKS(50));
   smoke_me_mg();
 #endif
 
   ZdtFrame frame{};
-  TickType_t next_stat = xTaskGetTickCount() + pdMS_TO_TICKS(MOTOR_DUMP_PERIOD_MS);
   for (;;)
   {
-    MotorDump_Poll();
-    const TickType_t now = xTaskGetTickCount();
-    TickType_t wait = (next_stat > now) ? (next_stat - now) : 0;
-    if (wait > pdMS_TO_TICKS(20)) wait = pdMS_TO_TICKS(20); /* poll dump often */
-    if (xQueueReceive(zdt_rx_queue, &frame, wait) == pdTRUE)
+    if (xQueueReceive(zdt_rx_queue, &frame, portMAX_DELAY) == pdTRUE)
     {
-      MotorDump_RxHex(frame.data, frame.len);
       ZdtAck ack{};
       if (ZdtProto_FindAck(frame.data, frame.len, &ack))
       {
-        MotorDump_Printf("A%u %02X %02X",
-                         static_cast<unsigned>(ack.addr),
-                         static_cast<unsigned>(ack.cmd),
-                         static_cast<unsigned>(ack.status));
         if (ack.addr == wait_addr && ack.cmd == wait_cmd && ack.status == ZDT_ACK_OK)
         {
           last_ack_ok = 1U;
@@ -482,17 +401,8 @@ extern "C" void StartZdtTask(void *argument)
         }
       }
     }
-    MotorDump_Poll();
-    if (xTaskGetTickCount() >= next_stat)
-    {
-      MotorDump_Printf("S %u-%u",
-                       static_cast<unsigned>(ZDT_ADDR_LIFT),
-                       static_cast<unsigned>(ZDT_ADDR_WHEEL_RR));
-      next_stat = xTaskGetTickCount() + pdMS_TO_TICKS(MOTOR_DUMP_PERIOD_MS);
-    }
   }
 }
-
 
 extern "C" void Zdt_UART_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {

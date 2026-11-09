@@ -306,7 +306,7 @@ private:
         (void)Zdt_Stop(kWheels[i]);
         vTaskDelay(gap);
       }
-      reply_fmt("ERR TEST en=0x%02X vel=0x%02X (bit0=FL..bit3=RR; TIMEOUT=无USART1 ACK)",
+      reply_fmt("ERR TEST en=0x%02X vel=0x%02X (bit0=FL..bit3=RR; TIMEOUT=鏃燯SART1 ACK)",
                 static_cast<unsigned>(fail_en), static_cast<unsigned>(fail_vel));
       return;
     }

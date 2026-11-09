@@ -4,7 +4,6 @@ add_library(zdt INTERFACE)
 target_sources(zdt INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/zdt.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/zdt_protocol.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/motor_dump.cpp
 )
 
 target_include_directories(zdt INTERFACE

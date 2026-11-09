@@ -35,12 +35,4 @@
 #define ZDT_TASK_STACK_SIZE     (256U * 4U)
 #define ZDT_TASK_PRIORITY       osPriorityNormal
 
-/* Mirror motor/lift traffic as short # ASCII lines on 串口2 TX (same UART as ZDT). */
-#ifndef MOTOR_DUMP_ASCII
-#define MOTOR_DUMP_ASCII        1
-#endif
-#ifndef MOTOR_DUMP_PERIOD_MS
-#define MOTOR_DUMP_PERIOD_MS    2000U
-#endif
-
 #endif /* __ZDT_CONFIG_H */

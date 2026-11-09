@@ -22,5 +22,6 @@ endif()
 
 target_include_directories(bt INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_BINARY_DIR}/generated
     ${CMAKE_SOURCE_DIR}/Applications/Inc
 )

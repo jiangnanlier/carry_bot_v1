@@ -1,5 +1,7 @@
 #include "bt_protocol.h"
 #include "imu_task.h"
+#include "fw_version.h"
+#include <cstdio>
 #include <cstring>
 #include <cctype>
 
@@ -27,6 +29,22 @@ public:
     }
     for (uint16_t i = 0U; i < n; ++i)
       cmd[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(cmd[i])));
+
+
+    if ((n == 3U && std::memcmp(cmd, "ver", 3) == 0) ||
+        (n == 7U && std::memcmp(cmd, "version", 7) == 0))
+    {
+      /* nano.specs: no float printf; integers/strings only */
+      const int nwr = std::snprintf(
+          reinterpret_cast<char *>(reply_), sizeof(reply_),
+          "OK VER %s %s %s\r\n",
+          FW_VERSION_BRANCH, FW_VERSION_HASH, FW_VERSION_DESC);
+      if (nwr > 0 && static_cast<size_t>(nwr) < sizeof(reply_))
+        reply_len_ = static_cast<uint16_t>(nwr);
+      else
+        reply_len_ = 0U;
+      return true;
+    }
 
     if ((n == 4U && std::memcmp(cmd, "gcal", 4) == 0) ||
         (n == 7U && std::memcmp(cmd, "gyrocal", 7) == 0))

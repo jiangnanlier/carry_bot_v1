@@ -39,6 +39,7 @@ add_subdirectory(cmake/stm32cubemx)
 
 # Add user libraries
 add_subdirectory(app/Link)
+add_subdirectory(app/ZDT)
 
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
@@ -67,6 +68,7 @@ list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
 target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx
     link
+    zdt
 
     # Add user defined libraries
 )

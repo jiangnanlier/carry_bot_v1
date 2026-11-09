@@ -90,20 +90,18 @@ ZdtSlot *slot_find(uint8_t addr)
 HAL_StatusTypeDef send_frame(const uint8_t *data, uint16_t len)
 {
   if (data == nullptr || len == 0U || len > static_cast<uint16_t>(sizeof(zdt_tx_buf))) return HAL_ERROR;
-  /* Human-readable TX mirror on 串口2 before binary Emm frame. */
-  MotorDump_Hex("TX", data, len);
+  /* Enqueue TX hex only — never block UART before binary Emm frame. */
+  MotorDump_TxHex(data, len);
+  if (MotorDump_PrepareBinaryTx() != HAL_OK) return HAL_BUSY;
+  if (huart1.hdmatx == nullptr)
   {
-    const TickType_t t0 = xTaskGetTickCount();
-    while (huart1.gState != HAL_UART_STATE_READY ||
-           (huart1.hdmatx != nullptr && (huart1.hdmatx->Instance->CR & DMA_SxCR_EN) != 0U))
-    {
-      if ((xTaskGetTickCount() - t0) >= pdMS_TO_TICKS(30)) return HAL_BUSY;
-      vTaskDelay(1);
-    }
+    MotorDump_FinishBinaryTx();
+    return HAL_ERROR;
   }
-  if (huart1.hdmatx == nullptr) return HAL_ERROR;
   std::memcpy(zdt_tx_buf, data, len);
-  return HAL_UART_Transmit_DMA(&huart1, zdt_tx_buf, len);
+  const HAL_StatusTypeDef st = HAL_UART_Transmit_DMA(&huart1, zdt_tx_buf, len);
+  MotorDump_FinishBinaryTx();
+  return st;
 }
 
 void note_ack_from_frame(const ZdtFrame &frame)
@@ -443,6 +441,7 @@ extern "C" void StartZdtTask(void *argument)
   slots_init();
   zdt_rx_queue = xQueueCreate(ZDT_QUEUE_LEN, sizeof(ZdtFrame));
   zdt_ack_sem = xSemaphoreCreateBinary();
+  MotorDump_Init();
 
   if (huart1.Init.BaudRate != ZDT_BAUDRATE)
   {
@@ -462,15 +461,17 @@ extern "C" void StartZdtTask(void *argument)
   TickType_t next_stat = xTaskGetTickCount() + pdMS_TO_TICKS(MOTOR_DUMP_PERIOD_MS);
   for (;;)
   {
+    MotorDump_Poll();
     const TickType_t now = xTaskGetTickCount();
     TickType_t wait = (next_stat > now) ? (next_stat - now) : 0;
+    if (wait > pdMS_TO_TICKS(20)) wait = pdMS_TO_TICKS(20); /* poll dump often */
     if (xQueueReceive(zdt_rx_queue, &frame, wait) == pdTRUE)
     {
-      MotorDump_Hex("RX", frame.data, frame.len);
+      MotorDump_RxHex(frame.data, frame.len);
       ZdtAck ack{};
       if (ZdtProto_FindAck(frame.data, frame.len, &ack))
       {
-        MotorDump_Printf("ACK a=%u cmd=0x%02X st=0x%02X",
+        MotorDump_Printf("A%u %02X %02X",
                          static_cast<unsigned>(ack.addr),
                          static_cast<unsigned>(ack.cmd),
                          static_cast<unsigned>(ack.status));
@@ -481,12 +482,11 @@ extern "C" void StartZdtTask(void *argument)
         }
       }
     }
+    MotorDump_Poll();
     if (xTaskGetTickCount() >= next_stat)
     {
-      MotorDump_Printf("STAT addr lift=%u turn=%u wheels=%u-%u",
+      MotorDump_Printf("S %u-%u",
                        static_cast<unsigned>(ZDT_ADDR_LIFT),
-                       static_cast<unsigned>(ZDT_ADDR_TURN),
-                       static_cast<unsigned>(ZDT_ADDR_WHEEL_FL),
                        static_cast<unsigned>(ZDT_ADDR_WHEEL_RR));
       next_stat = xTaskGetTickCount() + pdMS_TO_TICKS(MOTOR_DUMP_PERIOD_MS);
     }

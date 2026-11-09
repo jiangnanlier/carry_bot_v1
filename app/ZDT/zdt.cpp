@@ -143,6 +143,22 @@ extern "C" HAL_StatusTypeDef Zdt_Stop(uint8_t addr)
   return send_frame(f, n);
 }
 
+extern "C" HAL_StatusTypeDef Zdt_Vel(uint8_t addr, uint8_t dir, uint16_t vel_rpm)
+{
+  ZdtSlot *s = slot_find(addr);
+  s->dir = dir ? 1U : 0U;
+  s->vel = vel_rpm;
+  if (addr != ZDT_ADDR_BROADCAST) s->addr = addr;
+
+  ZdtSlot wire = *s;
+  wire.addr = addr;
+
+  uint8_t f[8];
+  const uint8_t n = ZdtProto_EncodeVel(f, sizeof(f), &wire);
+  if (n == 0U) return HAL_ERROR;
+  return send_frame(f, n);
+}
+
 extern "C" HAL_StatusTypeDef Zdt_GoDeg(uint8_t addr, int32_t deg)
 {
   ZdtSlot *s = slot_find(addr);

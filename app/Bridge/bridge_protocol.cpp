@@ -10,6 +10,9 @@
 #include <cctype>
 #include <cstdarg>
 
+#include "FreeRTOS.h"
+#include "task.h"
+
 namespace {
 
 struct BridgeSlot
@@ -37,6 +40,19 @@ const char *skip_ws(const char *p)
   while (*p == ' ' || *p == '\t') ++p;
   return p;
 }
+
+bool eq_ci(const char *a, const char *b)
+{
+  if (a == nullptr || b == nullptr) return false;
+  while (*a != '\0' && *b != '\0')
+  {
+    if (to_upper(*a) != to_upper(*b)) return false;
+    ++a;
+    ++b;
+  }
+  return *a == '\0' && *b == '\0';
+}
+
 
 bool parse_u32(const char *&p, uint32_t *out)
 {
@@ -196,6 +212,12 @@ private:
     const char *p = skip_ws(line);
     if (*p == '\0') return;
 
+    if (eq_ci(p, "test"))
+    {
+      handle_test_fwd();
+      return;
+    }
+
     const char head = to_upper(*p);
     if (head == 'M')
     {
@@ -207,7 +229,66 @@ private:
       handle_servo(p + 1);
       return;
     }
-    append_line("ERR unknown, send M? or SH");
+    append_line("ERR unknown, send M? or SH or test");
+  }
+
+  void handle_test_fwd()
+  {
+    /* Four mecanum wheels, same dir/vel for ~2s then stop.
+     * Assumption (no kinematics yet): identical Emm dir=BRIDGE_TEST_DIR on
+     * addr 3/4/5/6. If chassis crawls sideways/backwards, flip dir or per-wheel signs later. */
+    static const uint8_t kWheels[] = {
+      ZDT_ADDR_WHEEL_FL, ZDT_ADDR_WHEEL_RL,
+      ZDT_ADDR_WHEEL_FR, ZDT_ADDR_WHEEL_RR
+    };
+    const uint8_t dir = static_cast<uint8_t>(BRIDGE_TEST_DIR);
+    const uint16_t vel = static_cast<uint16_t>(BRIDGE_TEST_VEL_RPM);
+    const TickType_t gap = pdMS_TO_TICKS(BRIDGE_TEST_GAP_MS);
+
+    for (uint8_t i = 0U; i < 4U; ++i)
+    {
+      const HAL_StatusTypeDef st = Zdt_Enable(kWheels[i], 1U);
+      if (st != HAL_OK)
+      {
+        reply_fmt("ERR TEST enable addr=%u %s", static_cast<unsigned>(kWheels[i]),
+                  hal_err(st));
+        return;
+      }
+      vTaskDelay(gap);
+    }
+
+    for (uint8_t i = 0U; i < 4U; ++i)
+    {
+      const HAL_StatusTypeDef st = Zdt_Vel(kWheels[i], dir, vel);
+      if (st != HAL_OK)
+      {
+        for (uint8_t j = 0U; j < 4U; ++j)
+        {
+          (void)Zdt_Stop(kWheels[j]);
+          vTaskDelay(gap);
+        }
+        reply_fmt("ERR TEST vel addr=%u %s", static_cast<unsigned>(kWheels[i]),
+                  hal_err(st));
+        return;
+      }
+      vTaskDelay(gap);
+    }
+
+    /* Blocks linkTask ~2s; OK after stop. Acceptable for smoke only. */
+    vTaskDelay(pdMS_TO_TICKS(BRIDGE_TEST_MS));
+
+    for (uint8_t i = 0U; i < 4U; ++i)
+    {
+      (void)Zdt_Stop(kWheels[i]);
+      vTaskDelay(gap);
+    }
+    for (uint8_t i = 0U; i < 4U; ++i)
+    {
+      (void)Zdt_Enable(kWheels[i], 0U);
+      vTaskDelay(gap);
+    }
+
+    append_line("OK TEST fwd 2s");
   }
 
   void handle_motor(const char *p)
@@ -221,7 +302,7 @@ private:
 
     if (*p == '?' || to_upper(*p) == 'H')
     {
-      append_line("OK A-tier: M? ME0/1 MG[+|-]deg MX MS[n] ML MJ S? S0U/S1U S0C/S0O/S1M");
+      append_line("OK A-tier: M? ME0/1 MG[+|-]deg MX MS[n] ML MJ S? S0U/S1U S0C/S0O/S1M test");
       append_line("addr 1=lift 2=turn 3-6=wheels *=bcast default=2");
       return;
     }
@@ -370,7 +451,7 @@ private:
         break;
       }
       case '?':
-        append_line("OK A-tier: M? ME0/1 MG[+|-]deg MX MS[n] ML MJ");
+        append_line("OK A-tier: M? ME0/1 MG[+|-]deg MX MS[n] ML MJ test");
         break;
       default:
         append_line("ERR unknown M cmd, send M?");

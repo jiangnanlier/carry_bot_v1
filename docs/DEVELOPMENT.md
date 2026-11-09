@@ -113,6 +113,7 @@ K230 VisionModule ──(另开 UART，勿占 USART1/6)──> 主控（待定�
 | `S0U1000` / `S0U1500` | 夹爪关闭/打开（软件钳 1000–1500） |
 | `S1U<us>` | 转盘绝对脉宽（硬件钳 200–2800） |
 | `S0C` / `S0O` / `S1M` | 夹住 / 打开 / 转盘中位 |
+| `test` / `TEST` | 轮 3–6 使能 + 同向速度跑约 2s 后停止/失能（无 kinematics 假设） |
 
 B/C 档（`MV`/`MQ`/麦轮 `MFW`/`X:Y:`/摆动等）回 `ERR not implemented`。
 
@@ -126,6 +127,7 @@ M1X
 S0U1500
 S0U1000
 S1U1500
+test
 ```
 
 本分支已 merge `feature/zdt-motor-bus` + `feature/servo-pca9685` 以便链接；上板验证后再合 main。

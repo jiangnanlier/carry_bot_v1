@@ -23,6 +23,9 @@ HAL_StatusTypeDef Zdt_GoDeg(uint8_t addr, int32_t deg);
 /* MX: immediate stop */
 HAL_StatusTypeDef Zdt_Stop(uint8_t addr);
 
+/* Velocity mode (Emm 0xF6). dir: 0/1; vel_rpm uses Emm velocity field. */
+HAL_StatusTypeDef Zdt_Vel(uint8_t addr, uint8_t dir, uint16_t vel_rpm);
+
 /* Wait for Addr+Cmd ACK with status 0x02 (OK). */
 HAL_StatusTypeDef Zdt_WaitAck(uint8_t addr, uint8_t cmd, uint32_t timeout_ms);
 

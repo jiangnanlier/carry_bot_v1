@@ -34,6 +34,33 @@ enable_language(C ASM)
 # Create an executable object type
 add_executable(${CMAKE_PROJECT_NAME})
 
+# --- fw_version (git branch/hash/desc for 串口1 ver) ---
+set(FW_VERSION_H "${CMAKE_BINARY_DIR}/generated/fw_version.h")
+add_custom_command(
+    OUTPUT "${FW_VERSION_H}"
+    COMMAND ${CMAKE_COMMAND}
+            -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+            -DOUT_H=${FW_VERSION_H}
+            -P ${CMAKE_SOURCE_DIR}/cmake/gen_fw_version.cmake
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Generating fw_version.h from git"
+    VERBATIM
+)
+add_custom_target(gen_fw_version DEPENDS "${FW_VERSION_H}")
+# Force regenerate each build (git HEAD may move without CMake reconfigure)
+add_custom_target(gen_fw_version_always ALL
+    COMMAND ${CMAKE_COMMAND}
+            -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+            -DOUT_H=${FW_VERSION_H}
+            -P ${CMAKE_SOURCE_DIR}/cmake/gen_fw_version.cmake
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Refreshing fw_version.h from git"
+    VERBATIM
+)
+add_dependencies(${CMAKE_PROJECT_NAME} gen_fw_version_always)
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE ${CMAKE_BINARY_DIR}/generated)
+
+
 # Add STM32CubeMX generated sources
 add_subdirectory(cmake/stm32cubemx)
 

@@ -4,6 +4,7 @@ add_library(bridge INTERFACE)
 
 target_include_directories(bridge INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_BINARY_DIR}/generated
     ${CMAKE_SOURCE_DIR}/app/Link
     ${CMAKE_SOURCE_DIR}/app/ZDT
     ${CMAKE_SOURCE_DIR}/app/Servo

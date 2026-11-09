@@ -1,4 +1,5 @@
 #include "bridge_config.h"
+#include "fw_version.h"
 #include "link_public.h"
 #include "link_protocol.h"
 #include "zdt_public.h"
@@ -213,6 +214,11 @@ private:
     const char *p = skip_ws(line);
     if (*p == '\0') return;
 
+    if (eq_ci(p, "ver") || eq_ci(p, "version"))
+    {
+      handle_ver();
+      return;
+    }
     if (eq_ci(p, "test1m"))
     {
       handle_test_1m();
@@ -235,7 +241,7 @@ private:
       handle_servo(p + 1);
       return;
     }
-    append_line("ERR unknown, send M? or SH or test/test1m");
+    append_line("ERR unknown, send M? or SH or test/test1m/ver");
   }
 
   void flush_reply()
@@ -258,6 +264,14 @@ private:
     }
   }
 
+
+
+  void handle_ver()
+  {
+    /* 串口1: ver / version — branch + short hash + subject (from fw_version.h). */
+    reply_fmt("OK VER %s %s %s",
+              FW_VERSION_BRANCH, FW_VERSION_HASH, FW_VERSION_DESC);
+  }
 
   void handle_test_1m()
   {
@@ -477,7 +491,7 @@ private:
 
     if (*p == '?' || to_upper(*p) == 'H')
     {
-      append_line("OK A-tier: M? ME0/1 MG[+|-]deg MX MS[n] ML MJ S? ... test test1m");
+      append_line("OK A-tier: M? ME0/1 MG[+|-]deg MX MS[n] ML MJ S? ... test test1m ver");
       append_line("addr 1=lift 2=turn 3-6=wheels *=bcast default=2");
       return;
     }

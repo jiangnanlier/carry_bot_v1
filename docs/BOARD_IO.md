@@ -64,3 +64,7 @@ Field meanings (stable for eyeballing):
 | `t` | temperature ×10 (°C decidegrees), e.g. `245` ≈ 24.5 °C |
 
 Expect: idle `key=0 led=HB err=0` and rising `ok`; hold KEY → `key=1 led=RED`; click → `mode`/`led` cycle; tilt board → `ax/ay/az` move.
+
+## IST8310 (I2C3)
+
+See `docs/IST8310_CUBEMX.md`. Soft GPIO: `PG6` RSTN, `PG3` DRDY. Driver: `UserLib/IST8310`.

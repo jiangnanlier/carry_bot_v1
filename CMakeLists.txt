@@ -40,6 +40,7 @@ add_subdirectory(cmake/stm32cubemx)
 # Add user libraries (QGimbal-style: BSP / UserLib / Applications + app/BT)
 add_subdirectory(BSP/Board)
 add_subdirectory(UserLib/BMI088)
+add_subdirectory(UserLib/IST8310)
 add_subdirectory(Applications)
 add_subdirectory(app/BT)
 
@@ -72,6 +73,7 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     bt
     bsp_board
     userlib_bmi088
+    userlib_ist8310
     applications
 
     # Add user defined libraries

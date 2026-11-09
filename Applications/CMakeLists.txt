@@ -18,4 +18,5 @@ target_link_libraries(applications PUBLIC
   stm32cubemx
   bsp_board
   userlib_bmi088
+  userlib_ist8310
 )

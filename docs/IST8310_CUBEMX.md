@@ -1,110 +1,91 @@
-# IST8310 磁力计 —— CubeMX 配置清单（RoboMaster 开发板 C 型）
+﻿# IST8310 纾佸姏璁?鈥斺€?CubeMX 閰嶇疆娓呭崟锛圧oboMaster 寮€鍙戞澘 C 鍨嬶級
 
-> 分支：`feature/ist8310-mag`（自 `feature/bsp-board-io`）  
-> 状态：**仅文档**，驱动未实现。等你在 CubeMX 里加好 **I2C3 + 复位/DRDY 脚** 并 Generate Code 后，再在本分支落 `UserLib/IST8310`。  
-> 硬件依据：`CubeMx/docs/RoboMaster 开发板 C 型用户手册.pdf` / 原理图；布局风格对齐本仓 `docs/BOARD_IO.md`。
+> 鍒嗘敮锛歚feature/ist8310-mag`锛堣嚜 `feature/bsp-board-io`锛? 
+> 鐘舵€侊細**浠呮枃妗?*锛岄┍鍔ㄦ湭瀹炵幇銆傜瓑浣犲湪 CubeMX 閲屽姞濂?**I2C3 + 澶嶄綅/DRDY 鑴?* 骞?Generate Code 鍚庯紝鍐嶅湪鏈垎鏀惤 `UserLib/IST8310`銆? 
+> 纭欢渚濇嵁锛歚CubeMx/docs/RoboMaster 寮€鍙戞澘 C 鍨嬬敤鎴锋墜鍐?pdf` / 鍘熺悊鍥撅紱甯冨眬椋庢牸瀵归綈鏈粨 `docs/BOARD_IO.md`銆?
+## 1. 涓轰粈涔堣浣犲厛鏀?CubeMX
 
-## 1. 为什么要你先改 CubeMX
+褰撳墠 `carry_bot_v1.ioc` **鍙湁 I2C1**锛圥B8/PB9锛岀粰 PCA9685 绛夌敤锛夛紝**娌℃湁 I2C3**锛屼篃娌℃湁 IST8310 鐨?RSTN/DRDY GPIO銆? 
+纾佸姏璁¤蛋鏉胯浇 **I2C3**锛屽拰 I2C1 涓嶅啿绐侊紱鍦ㄩ┍鍔ㄥ啓姝讳箣鍓嶅繀椤诲厛鎶婂璁句粠 CubeMX 鐢熸垚鍑烘潵锛屽苟 **Keep User Code** 鍐嶆彁浜?`.ioc` + 鐢熸垚鐨?`i2c.c` / `gpio.c` / `main.h` 绛夈€?
+鏈垎鏀?**鍏堜笉鍐欓┍鍔?*锛岄伩鍏嶅拰鏈敓鎴愮殑 HAL 瀵逛笉涓娿€?
+## 2. CubeMX 鍕鹃€夋竻鍗曪紙璇蜂弗鏍兼寜姝わ級
 
-当前 `carry_bot_v1.ioc` **只有 I2C1**（PB8/PB9，给 PCA9685 等用），**没有 I2C3**，也没有 IST8310 的 RSTN/DRDY GPIO。  
-磁力计走板载 **I2C3**，和 I2C1 不冲突；在驱动写死之前必须先把外设从 CubeMX 生成出来，并 **Keep User Code** 再提交 `.ioc` + 生成的 `i2c.c` / `gpio.c` / `main.h` 等。
-
-本分支 **先不写驱动**，避免和未生成的 HAL 对不上。
-
-## 2. CubeMX 勾选清单（请严格按此）
-
-打开工程根目录 `carry_bot_v1.ioc`（STM32F407IGHx / Type-C）。
-
-### 2.1 I2C3（磁力计总线）
-
-| 项 | 设置 |
+鎵撳紑宸ョ▼鏍圭洰褰?`carry_bot_v1.ioc`锛圫TM32F407IGHx / Type-C锛夈€?
+### 2.1 I2C3锛堢鍔涜鎬荤嚎锛?
+| 椤?| 璁剧疆 |
 |---|---|
-| 外设 | **I2C3** → Mode: **I2C** |
-| 速度 | **Fast Mode 400 kHz**（与手册板载 mag 一致） |
-| SCL | **PA8** → `I2C3_SCL` |
-| SDA | **PC9** → `I2C3_SDA` |
-| GPIO | 开漏 + 上拉（Cube 默认 AF 即可；勿改成推挽） |
-| DMA | **v1 可不配**（先轮询 `HAL_I2C_Mem_*`）；日后再加 DMA 时勿占用 I2C1 已用的 DMA1 Stream0/6 |
-| NVIC | 若只做轮询可先关 Ev/Er；若开中断，优先级放在 FreeRTOS 允许的 **5–15** |
+| 澶栬 | **I2C3** 鈫?Mode: **I2C** |
+| 閫熷害 | **Fast Mode 400 kHz**锛堜笌鎵嬪唽鏉胯浇 mag 涓€鑷达級 |
+| SCL | **PA8** 鈫?`I2C3_SCL` |
+| SDA | **PC9** 鈫?`I2C3_SDA` |
+| GPIO | 寮€婕?+ 涓婃媺锛圕ube 榛樿 AF 鍗冲彲锛涘嬁鏀规垚鎺ㄦ尳锛?|
+| DMA | **v1 鍙笉閰?*锛堝厛杞 `HAL_I2C_Mem_*`锛夛紱鏃ュ悗鍐嶅姞 DMA 鏃跺嬁鍗犵敤 I2C1 宸茬敤鐨?DMA1 Stream0/6 |
+| NVIC | 鑻ュ彧鍋氳疆璇㈠彲鍏堝叧 Ev/Er锛涜嫢寮€涓柇锛屼紭鍏堢骇鏀惧湪 FreeRTOS 鍏佽鐨?**5鈥?5** |
 
-> 对照：本仓 I2C1 已是 Fast + DMA（舵机）。**IST8310 必须用 I2C3**，不要接到 I2C1。
+> 瀵圭収锛氭湰浠?I2C1 宸叉槸 Fast + DMA锛堣埖鏈猴級銆?*IST8310 蹇呴』鐢?I2C3**锛屼笉瑕佹帴鍒?I2C1銆?
+### 2.2 GPIO锛氬浣?/ 鏁版嵁灏辩华
 
-### 2.2 GPIO：复位 / 数据就绪
-
-| 网络名（建议 User Label） | 引脚 | 方向 / 模式 | 默认电平 | 说明 |
+| 缃戠粶鍚嶏紙寤鸿 User Label锛?| 寮曡剼 | 鏂瑰悜 / 妯″紡 | 榛樿鐢靛钩 | 璇存槑 |
 |---|---|---|---|---|
-| `RSTN_IST8310` | **PG6** | Output Push-Pull | **HIGH** | 低有效复位；空闲必须拉高 |
-| `DRDY_IST8310` | **PG3** | Input（可先无上下拉，按原理图） | — | 数据就绪；**v1 轮询可读寄存器，可不配 EXTI** |
+| `RSTN_IST8310` | **PG6** | Output Push-Pull | **HIGH** | 浣庢湁鏁堝浣嶏紱绌洪棽蹇呴』鎷夐珮 |
+| `DRDY_IST8310` | **PG3** | Input锛堝彲鍏堟棤涓婁笅鎷夛紝鎸夊師鐞嗗浘锛?| 鈥?| 鏁版嵁灏辩华锛?*v1 杞鍙瀵勫瓨鍣紝鍙笉閰?EXTI** |
 
-可选（以后再说）：
+鍙€夛紙浠ュ悗鍐嶈锛夛細
 
-- PG3 → EXTI falling edge，在中断里置标志，磁力计任务唤醒读 XYZ。  
-- v1：**轮询即可**，先把 I2C 通了再加 EXTI。
-
-### 2.3 复位时序（驱动里实现时用；Cube 侧只需默认 HIGH）
-
-典型：`RSTN=0` 保持 ≥50 ms → `RSTN=1` → 再延时数十 ms → `IsDeviceReady` / 读 WHO_AM_I。  
-CubeMX 里把 PG6 默认输出高即可，上电后由驱动做一次脉冲复位。
-
-### 2.4 I2C 从机地址（务必分清 7-bit / HAL）
-
-| 说法 | 值 | 用在哪里 |
+- PG3 鈫?EXTI falling edge锛屽湪涓柇閲岀疆鏍囧織锛岀鍔涜浠诲姟鍞ら啋璇?XYZ銆? 
+- v1锛?*杞鍗冲彲**锛屽厛鎶?I2C 閫氫簡鍐嶅姞 EXTI銆?
+### 2.3 澶嶄綅鏃跺簭锛堥┍鍔ㄩ噷瀹炵幇鏃剁敤锛汣ube 渚у彧闇€榛樿 HIGH锛?
+鍏稿瀷锛歚RSTN=0` 淇濇寔 鈮?0 ms 鈫?`RSTN=1` 鈫?鍐嶅欢鏃舵暟鍗?ms 鈫?`IsDeviceReady` / 璇?WHO_AM_I銆? 
+CubeMX 閲屾妸 PG6 榛樿杈撳嚭楂樺嵆鍙紝涓婄數鍚庣敱椹卞姩鍋氫竴娆¤剦鍐插浣嶃€?
+### 2.4 I2C 浠庢満鍦板潃锛堝姟蹇呭垎娓?7-bit / HAL锛?
+| 璇存硶 | 鍊?| 鐢ㄥ湪鍝噷 |
 |---|---|---|
-| **7-bit 地址** | **`0x0E`** | 数据手册 / 逻辑分析仪地址帧 |
-| **HAL `DevAddress`（左移 1 位）** | **`0x1C`**（即 `0x0E << 1`） | `HAL_I2C_Mem_Read/Write`、`HAL_I2C_IsDeviceReady` 等 |
+| **7-bit 鍦板潃** | **`0x0E`** | 鏁版嵁鎵嬪唽 / 閫昏緫鍒嗘瀽浠湴鍧€甯?|
+| **HAL `DevAddress`锛堝乏绉?1 浣嶏級** | **`0x1C`**锛堝嵆 `0x0E << 1`锛?| `HAL_I2C_Mem_Read/Write`銆乣HAL_I2C_IsDeviceReady` 绛?|
 
-说明：STM32 HAL 的 `DevAddress` 参数是 **7-bit 地址左移 1 位后的 8-bit 形式**（写方向位由 HAL 再处理）。  
-文档/注释里请同时写：`IST8310_I2C_ADDR_7BIT 0x0E` 与 `IST8310_I2C_ADDR_HAL (0x0E << 1) /* 0x1C */`，避免和舵机侧 `0x40`/`0x80` 混用习惯搞反。
-
-WHO_AM_I 等寄存器值以 IST8310 手册为准（驱动实现时再锁进 `ist8310_reg.h`）。
-
+璇存槑锛歋TM32 HAL 鐨?`DevAddress` 鍙傛暟鏄?**7-bit 鍦板潃宸︾Щ 1 浣嶅悗鐨?8-bit 褰㈠紡**锛堝啓鏂瑰悜浣嶇敱 HAL 鍐嶅鐞嗭級銆? 
+鏂囨。/娉ㄩ噴閲岃鍚屾椂鍐欙細`IST8310_I2C_ADDR_7BIT 0x0E` 涓?`IST8310_I2C_ADDR_HAL (0x0E << 1) /* 0x1C */`锛岄伩鍏嶅拰鑸垫満渚?`0x40`/`0x80` 娣风敤涔犳儻鎼炲弽銆?
+WHO_AM_I 绛夊瘎瀛樺櫒鍊间互 IST8310 鎵嬪唽涓哄噯锛堥┍鍔ㄥ疄鐜版椂鍐嶉攣杩?`ist8310_reg.h`锛夈€?
 ### 2.5 Generate Code
 
-1. Project Manager → Code Generator：**Keep User Code when re-generating**（或等价 “备份用户代码”）勾上。  
-2. Generate Code。  
-3. 编译确认无回归（现有 USART / I2C1 / SPI1 手改文件仍在）。  
-4. **提交**更新后的：
-   - `carry_bot_v1.ioc`
-   - `Core/Src/i2c.c` / `Core/Inc/i2c.h`（应出现 `hi2c3`）
-   - `Core/Src/gpio.c`、`Core/Inc/main.h`（`RSTN_IST8310` / `DRDY_IST8310` 宏）
-   - 如有变动的 `stm32f4xx_hal_msp.c`、`.mxproject` 等一并纳入  
-5. 告诉协作方「CubeMX 已合入」，再在本分支写驱动。
-
-## 3. 本仓落地路径（对齐现有 QGimbal 风格，勿另起炉灶）
-
-已有布局（见 `docs/BOARD_IO.md`）：
+1. Project Manager 鈫?Code Generator锛?*Keep User Code when re-generating**锛堟垨绛変环 鈥滃浠界敤鎴蜂唬鐮佲€濓級鍕句笂銆? 
+2. Generate Code銆? 
+3. 缂栬瘧纭鏃犲洖褰掞紙鐜版湁 USART / I2C1 / SPI1 鎵嬫敼鏂囦欢浠嶅湪锛夈€? 
+4. **鎻愪氦**鏇存柊鍚庣殑锛?   - `carry_bot_v1.ioc`
+   - `Core/Src/i2c.c` / `Core/Inc/i2c.h`锛堝簲鍑虹幇 `hi2c3`锛?   - `Core/Src/gpio.c`銆乣Core/Inc/main.h`锛坄RSTN_IST8310` / `DRDY_IST8310` 瀹忥級
+   - 濡傛湁鍙樺姩鐨?`stm32f4xx_hal_msp.c`銆乣.mxproject` 绛変竴骞剁撼鍏? 
+5. 鍛婅瘔鍗忎綔鏂广€孋ubeMX 宸插悎鍏ャ€嶏紝鍐嶅湪鏈垎鏀啓椹卞姩銆?
+## 3. 鏈粨钀藉湴璺緞锛堝榻愮幇鏈?QGimbal 椋庢牸锛屽嬁鍙﹁捣鐐夌伓锛?
+宸叉湁甯冨眬锛堣 `docs/BOARD_IO.md`锛夛細
 
 ```text
 BSP/Board/          LED / KEY / CS GPIO
-UserLib/BMI088/     SPI 传感器驱动
-Applications/       boardTask / imuTask
+UserLib/BMI088/     SPI 浼犳劅鍣ㄩ┍鍔?Applications/       boardTask / imuTask
 ```
 
-IST8310 建议（**实现阶段**再创建，本 PR 不建空目录刷屏）：
-
-| 层级 | 建议路径 | 职责 |
+IST8310 寤鸿锛?*瀹炵幇闃舵**鍐嶅垱寤猴紝鏈?PR 涓嶅缓绌虹洰褰曞埛灞忥級锛?
+| 灞傜骇 | 寤鸿璺緞 | 鑱岃矗 |
 |---|---|---|
-| 板级脚 | `BSP/Board/` 增补或薄封装 `board_ist8310_gpio.*`（可选） | RSTN 脉冲、读 DRDY |
-| 器件驱动 | **`UserLib/IST8310/`**（对标 `UserLib/BMI088`） | 寄存器、单次/连续测、XYZ 换算 |
-| 任务 | `Applications/` → 如 `mag_task.*` | 周期读数；可与现有 SMOKE UART 拼一行 |
+| 鏉跨骇鑴?| `BSP/Board/` 澧炶ˉ鎴栬杽灏佽 `board_ist8310_gpio.*`锛堝彲閫夛級 | RSTN 鑴夊啿銆佽 DRDY |
+| 鍣ㄤ欢椹卞姩 | **`UserLib/IST8310/`**锛堝鏍?`UserLib/BMI088`锛?| 瀵勫瓨鍣ㄣ€佸崟娆?杩炵画娴嬨€乆YZ 鎹㈢畻 |
+| 浠诲姟 | `Applications/` 鈫?濡?`mag_task.*` | 鍛ㄦ湡璇绘暟锛涘彲涓庣幇鏈?SMOKE UART 鎷间竴琛?|
 
-CMake：按 BMI088 同样方式在 `UserLib/IST8310/CMakeLists.txt` + 上层 `add_subdirectory`；**不要**塞进 `app/`（那是 Link/ZDT/Servo 协议层风格）。
+CMake锛氭寜 BMI088 鍚屾牱鏂瑰紡鍦?`UserLib/IST8310/CMakeLists.txt` + 涓婂眰 `add_subdirectory`锛?*涓嶈**濉炶繘 `app/`锛堥偅鏄?Link/ZDT/Servo 鍗忚灞傞鏍硷級銆?
+璋冭瘯/鐑у綍锛氭湰鍒嗘敮宸插甫鑷?bsp 鐨?`openocd.cfg` + `.vscode`锛圗LF 鍥哄畾涓?`carry_bot_v1.elf`锛夛紝worktree 鐩綍鍚嶄笉褰卞搷銆?
+## 4. 楠屾敹锛圕ubeMX 瀹屾垚鍚庛€侀┍鍔ㄥ墠锛?
+- [ ] `.ioc` 鍙 I2C3 @ PA8/PC9 Fast Mode  
+- [ ] `hi2c3` 宸茬敓鎴愶紱PG6 榛樿楂樸€丳G3 涓鸿緭鍏? 
+- [ ] Debug 鏋勫缓閫氳繃锛涘師鏈?BMI088 SMOKE / LED/KEY 琛屼负鏈潖  
+- [ ] 锛堝彲閫夛級鐢?`HAL_I2C_IsDeviceReady(&hi2c3, 0x1C, 鈥?` 鍦ㄤ复鏃?USER CODE 閲屾帰涓€涓嬶紝搴旇繑鍥?`HAL_OK`
 
-调试/烧录：本分支已带自 bsp 的 `openocd.cfg` + `.vscode`（ELF 固定为 `carry_bot_v1.elf`），worktree 目录名不影响。
+## 5. 闈炵洰鏍囷紙鏈垎鏀綋鍓嶏級
 
-## 4. 验收（CubeMX 完成后、驱动前）
-
-- [ ] `.ioc` 可见 I2C3 @ PA8/PC9 Fast Mode  
-- [ ] `hi2c3` 已生成；PG6 默认高、PG3 为输入  
-- [ ] Debug 构建通过；原有 BMI088 SMOKE / LED/KEY 行为未坏  
-- [ ] （可选）用 `HAL_I2C_IsDeviceReady(&hi2c3, 0x1C, …)` 在临时 USER CODE 里探一下，应返回 `HAL_OK`
-
-## 5. 非目标（本分支当前）
-
-- 不实现完整 IST8310 驱动 / magTask  
-- 不改 I2C1 / PCA9685 / USART DMA 分配  
-- 不把 mag 协议接到 Bridge（以后另开任务）
-
+- 涓嶅疄鐜板畬鏁?IST8310 椹卞姩 / magTask  
+- 涓嶆敼 I2C1 / PCA9685 / USART DMA 鍒嗛厤  
+- 涓嶆妸 mag 鍗忚鎺ュ埌 Bridge锛堜互鍚庡彟寮€浠诲姟锛?
 ---
 
-**你现在需要做的：** 按 §2 改 CubeMX → Generate → 编译 → 把生成文件 commit 到 `feature/ist8310-mag`（或开 follow-up commit）。完成后喊一声即可开始写 `UserLib/IST8310`。
+**浣犵幇鍦ㄩ渶瑕佸仛鐨勶細** 鎸?搂2 鏀?CubeMX 鈫?Generate 鈫?缂栬瘧 鈫?鎶婄敓鎴愭枃浠?commit 鍒?`feature/ist8310-mag`锛堟垨寮€ follow-up commit锛夈€傚畬鎴愬悗鍠婁竴澹板嵆鍙紑濮嬪啓 `UserLib/IST8310`銆?
+## 6. 瀹炵幇鐘舵€侊紙鏈垎鏀悗缁彁浜わ級
+
+- **I2C3**锛氬凡浠庢湰鏈?CubeMX 鐢熸垚缁撴灉鍚堝叆锛坄.ioc` / `i2c.c` / `dma.c` / `main.c` / `stm32f4xx_it.*`锛夈€?- **PG6 / PG3**锛欳ube 鏈厤锛涚敱 `UserLib/IST8310` 鍦?`IST8310_Init` 閲?**杞垵濮嬪寲**锛圙PIOG 鏃堕挓銆丷STN 鎺ㄦ尳榛樿楂樸€丏RDY 杈撳叆锛夈€?- 椹卞姩锛歚UserLib/IST8310`锛坄Init` / `WhoAmI` / `ReadRaw` / `Read`鈫捖礣锛夈€?- 鍐掔儫锛歚imuTask` SMOKE 琛屽鍔?`merr/mok/mx/my/mz`锛埪礣脳10锛夈€?

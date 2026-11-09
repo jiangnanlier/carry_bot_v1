@@ -1,5 +1,7 @@
 #include "bt_protocol.h"
+#include "imu_task.h"
 #include <cstring>
+#include <cctype>
 
 /* 蓝牙调试模式：收到的原样回显，便于 AT 命令与串口助手调试。
  * 需要解析具体 AT 命令时，只改本文件即可，驱动层不受影响。 */
@@ -12,6 +14,30 @@ public:
   {
     reply_len_ = 0U;
     if (frame.len == 0U || frame.len > BT_FRAME_MAX) return false;
+
+    /* Trim CR/LF and accept "gcal" / "GYROCAL" to request gyro bias cal. */
+    char cmd[32];
+    uint16_t n = frame.len;
+    if (n >= sizeof(cmd)) n = static_cast<uint16_t>(sizeof(cmd) - 1U);
+    std::memcpy(cmd, frame.data, n);
+    cmd[n] = '\0';
+    while (n > 0U && (cmd[n - 1U] == '\r' || cmd[n - 1U] == '\n' || cmd[n - 1U] == ' '))
+    {
+      cmd[--n] = '\0';
+    }
+    for (uint16_t i = 0U; i < n; ++i)
+      cmd[i] = static_cast<char>(std::tolower(static_cast<unsigned char>(cmd[i])));
+
+    if ((n == 4U && std::memcmp(cmd, "gcal", 4) == 0) ||
+        (n == 7U && std::memcmp(cmd, "gyrocal", 7) == 0))
+    {
+      g_bmi088_cal_req = 1U;
+      static const char ack[] = "GYROCAL queued\r\n";
+      std::memcpy(reply_, ack, sizeof(ack) - 1U);
+      reply_len_ = static_cast<uint16_t>(sizeof(ack) - 1U);
+      return true;
+    }
+
     std::memcpy(reply_, frame.data, frame.len);
     reply_len_ = frame.len;
     return true;

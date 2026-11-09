@@ -28,13 +28,17 @@ typedef enum {
 typedef struct {
   bool initialized;
   float accel[3]; /* m/s^2-ish scale from QGimbal (raw * sen) */
-  float gyro[3];  /* rad/s */
+  float gyro[3];  /* rad/s, bias-subtracted after cal */
+  float gyro_bias[3]; /* rad/s, from BMI088_CalibrateGyro */
+  bool gyro_calibrated;
   float temperature_c;
 } bmi088_t;
 
 void BMI088_StructInit(bmi088_t *dev);
 bmi088_err_t BMI088_Init(bmi088_t *dev);
 void BMI088_Read(bmi088_t *dev);
+/** Average N still samples into gyro_bias; keep board still. delay_ms between samples. */
+bmi088_err_t BMI088_CalibrateGyro(bmi088_t *dev, uint16_t samples, uint16_t delay_ms);
 
 #ifdef __cplusplus
 }

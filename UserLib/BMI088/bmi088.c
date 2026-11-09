@@ -209,6 +209,8 @@ void BMI088_StructInit(bmi088_t *dev)
   dev->initialized = false;
   dev->accel[0] = dev->accel[1] = dev->accel[2] = 0.0f;
   dev->gyro[0] = dev->gyro[1] = dev->gyro[2] = 0.0f;
+  dev->gyro_bias[0] = dev->gyro_bias[1] = dev->gyro_bias[2] = 0.0f;
+  dev->gyro_calibrated = false;
   dev->temperature_c = 0.0f;
 }
 
@@ -256,9 +258,9 @@ void BMI088_Read(bmi088_t *dev)
   dev->accel[2] = ((int16_t)((buf[5] << 8) | buf[4])) * s_accel_sen;
 
   gyro_read_muli_reg(BMI088_GYRO_X_L, buf, 6);
-  dev->gyro[0] = ((int16_t)((buf[1] << 8) | buf[0])) * s_gyro_sen;
-  dev->gyro[1] = ((int16_t)((buf[3] << 8) | buf[2])) * s_gyro_sen;
-  dev->gyro[2] = ((int16_t)((buf[5] << 8) | buf[4])) * s_gyro_sen;
+  dev->gyro[0] = ((int16_t)((buf[1] << 8) | buf[0])) * s_gyro_sen - dev->gyro_bias[0];
+  dev->gyro[1] = ((int16_t)((buf[3] << 8) | buf[2])) * s_gyro_sen - dev->gyro_bias[1];
+  dev->gyro[2] = ((int16_t)((buf[5] << 8) | buf[4])) * s_gyro_sen - dev->gyro_bias[2];
 
   accel_read_muli_reg(BMI088_TEMP_M, tbuf, 2);
   traw = (int16_t)((tbuf[0] << 3) | (tbuf[1] >> 5));
@@ -266,4 +268,40 @@ void BMI088_Read(bmi088_t *dev)
     traw -= 2048;
   }
   dev->temperature_c = (float)traw * BMI088_TEMP_FACTOR + BMI088_TEMP_OFFSET;
+}
+
+
+bmi088_err_t BMI088_CalibrateGyro(bmi088_t *dev, uint16_t samples, uint16_t delay_ms)
+{
+  float sum[3] = {0.0f, 0.0f, 0.0f};
+  uint16_t i;
+  uint8_t buf[6];
+
+  if (dev == NULL || !dev->initialized) {
+    return BMI088_ERR_NO_SENSOR;
+  }
+  if (samples < 10u) {
+    samples = 10u;
+  }
+  if (delay_ms < 1u) {
+    delay_ms = 1u;
+  }
+
+  /* Temporarily clear bias so averages are raw. */
+  dev->gyro_bias[0] = dev->gyro_bias[1] = dev->gyro_bias[2] = 0.0f;
+  dev->gyro_calibrated = false;
+
+  for (i = 0u; i < samples; ++i) {
+    gyro_read_muli_reg(BMI088_GYRO_X_L, buf, 6);
+    sum[0] += ((int16_t)((buf[1] << 8) | buf[0])) * s_gyro_sen;
+    sum[1] += ((int16_t)((buf[3] << 8) | buf[2])) * s_gyro_sen;
+    sum[2] += ((int16_t)((buf[5] << 8) | buf[4])) * s_gyro_sen;
+    osDelay(delay_ms);
+  }
+
+  dev->gyro_bias[0] = sum[0] / (float)samples;
+  dev->gyro_bias[1] = sum[1] / (float)samples;
+  dev->gyro_bias[2] = sum[2] / (float)samples;
+  dev->gyro_calibrated = true;
+  return BMI088_OK;
 }

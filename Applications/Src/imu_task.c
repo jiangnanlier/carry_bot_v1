@@ -24,6 +24,7 @@ volatile uint8_t g_ist8310_last_err;
 volatile uint32_t g_ist8310_ok_count;
 
 wheel_ahrs_state_t g_wheel_ahrs;
+volatile uint8_t g_bmi088_cal_req;
 
 static const char *led_hint(uint8_t key, uint8_t mode)
 {
@@ -110,11 +111,55 @@ void StartImuTask(void *argument)
 
   {
     static const char ready[] =
-        "AHRS ready 串口1@9600 (SMOKE+AHRS r/p/y decideg, BMI088+IST8310)\r\n";
+        "AHRS ready 串口1@9600 (SMOKE+AHRS; send gcal for gyro bias)\r\n";
     (void)BT_Send((const uint8_t *)ready, (uint16_t)(sizeof(ready) - 1u));
   }
 
+  /* Boot gyro bias: keep board still ~1 s (200 x 5 ms). */
+  {
+    static const char cal_start[] = "GYROCAL boot start — keep still\r\n";
+    static const char cal_fail[] = "GYROCAL boot FAIL\r\n";
+    char cal_done[96];
+    int n;
+    (void)BT_Send((const uint8_t *)cal_start, (uint16_t)(sizeof(cal_start) - 1u));
+    if (BMI088_CalibrateGyro(&g_bmi088, 200u, 5u) != BMI088_OK) {
+      (void)BT_Send((const uint8_t *)cal_fail, (uint16_t)(sizeof(cal_fail) - 1u));
+    } else {
+      n = snprintf(cal_done, sizeof(cal_done),
+                   "GYROCAL boot OK bx=%d by=%d bz=%d (mrad/s)\r\n",
+                   (int)(g_bmi088.gyro_bias[0] * 1000.0f),
+                   (int)(g_bmi088.gyro_bias[1] * 1000.0f),
+                   (int)(g_bmi088.gyro_bias[2] * 1000.0f));
+      if (n > 0) {
+        (void)BT_Send((const uint8_t *)cal_done, (uint16_t)n);
+      }
+      WheelAhrs_Init(100.0f);
+    }
+  }
+
   for (;;) {
+    if (g_bmi088_cal_req != 0u) {
+      static const char cal_start[] = "GYROCAL cmd start — keep still\r\n";
+      static const char cal_fail[] = "GYROCAL cmd FAIL\r\n";
+      char cal_done[96];
+      int n;
+      g_bmi088_cal_req = 0u;
+      (void)BT_Send((const uint8_t *)cal_start, (uint16_t)(sizeof(cal_start) - 1u));
+      if (BMI088_CalibrateGyro(&g_bmi088, 200u, 5u) != BMI088_OK) {
+        (void)BT_Send((const uint8_t *)cal_fail, (uint16_t)(sizeof(cal_fail) - 1u));
+      } else {
+        n = snprintf(cal_done, sizeof(cal_done),
+                     "GYROCAL cmd OK bx=%d by=%d bz=%d (mrad/s)\r\n",
+                     (int)(g_bmi088.gyro_bias[0] * 1000.0f),
+                     (int)(g_bmi088.gyro_bias[1] * 1000.0f),
+                     (int)(g_bmi088.gyro_bias[2] * 1000.0f));
+        if (n > 0) {
+          (void)BT_Send((const uint8_t *)cal_done, (uint16_t)n);
+        }
+        WheelAhrs_Init(100.0f);
+      }
+    }
+
     BMI088_Read(&g_bmi088);
     g_bmi088_ok_count++;
 

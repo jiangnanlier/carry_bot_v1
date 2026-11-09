@@ -40,7 +40,7 @@ K230 VisionModule ──(另开 UART，勿占 USART1/6)──> 主控（待定�
 
 ## 3. Git 工作流（标准）
 
-- **主线仓库**：`carry_bot_v1`（本地分支已开好；GitHub 远端待建 `CameliaDev/carry_bot_v1`）
+- **主线仓库**：[vesperadev/carry_bot_v1](https://github.com/vesperadev/carry_bot_v1)（账号 vesperadev；分支已推全）
 - **`main`**：永远可编译基线
 - **功能分支**（已从当前基线切出）：
 
@@ -55,7 +55,7 @@ K230 VisionModule ──(另开 UART，勿占 USART1/6)──> 主控（待定�
 
 规则：
 
-1. 一个分支只干一件事；完成一点 → 编译通过 → 提交 →（有远端后）开 PR 进 `main`
+1. 一个分支只干一件事；完成一点 → 编译通过 → 提交 → 开 PR 进 `main`
 2. **禁止**在 `USART` 参考工程里继续堆功能；只允许只读抄协议与命令语义
 3. CubeMX 重新生成后必须核对 USART/I2C 的 DMA（USART 工程踩过坑）
 4. 提交前缀：`feat:` / `fix:` / `refactor:` / `docs:`；不提交 `build/`

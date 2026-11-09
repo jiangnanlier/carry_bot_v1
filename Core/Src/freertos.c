@@ -27,6 +27,8 @@
 /* USER CODE BEGIN Includes */
 #include "link_public.h"
 #include "link_config.h"
+#include "zdt_public.h"
+#include "zdt_config.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -52,6 +54,13 @@ const osThreadAttr_t linkTask_attributes = {
   .name = "linkTask",
   .stack_size = LINK_TASK_STACK_SIZE,
   .priority = (osPriority_t) LINK_TASK_PRIORITY,
+};
+/* Definitions for zdtTask */
+osThreadId_t zdtTaskHandle;
+const osThreadAttr_t zdtTask_attributes = {
+  .name = "zdtTask",
+  .stack_size = ZDT_TASK_STACK_SIZE,
+  .priority = (osPriority_t) ZDT_TASK_PRIORITY,
 };
 /* USER CODE END Variables */
 /* Definitions for defaultTask */
@@ -103,6 +112,7 @@ void MX_FREERTOS_Init(void) {
 
   /* USER CODE BEGIN RTOS_THREADS */
   linkTaskHandle = osThreadNew(StartLinkTask, NULL, &linkTask_attributes);
+  zdtTaskHandle = osThreadNew(StartZdtTask, NULL, &zdtTask_attributes);
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */

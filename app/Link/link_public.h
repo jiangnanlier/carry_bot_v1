@@ -18,6 +18,10 @@ HAL_StatusTypeDef Link_Send(const uint8_t *data, uint16_t len);
 /* 运行时修改串口6波特率并重启接收 */
 HAL_StatusTypeDef Link_SetBaudRate(uint32_t baudrate);
 
+/* HAL UART callbacks are owned by app/ZDT dispatcher; Link exposes hooks for USART6 */
+void Link_UART_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size);
+void Link_UART_ErrorCallback(UART_HandleTypeDef *huart);
+
 #ifdef __cplusplus
 }
 #endif

@@ -69,7 +69,7 @@ extern "C" void StartLinkTask(void *argument)
   }
 }
 
-extern "C" void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
+extern "C" void Link_UART_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
   if (huart->Instance != USART6) return;
 
@@ -87,7 +87,7 @@ extern "C" void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t S
   portYIELD_FROM_ISR(woken);
 }
 
-extern "C" void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+extern "C" void Link_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
   if (huart->Instance != USART6) return;
   __HAL_UNLOCK(huart);

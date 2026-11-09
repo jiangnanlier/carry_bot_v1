@@ -58,13 +58,20 @@ extern "C" void StartLinkTask(void *argument)
 
   for (;;)
   {
-    if (xQueueReceive(link_queue, &frame, portMAX_DELAY) == pdTRUE)
+    const TickType_t wait = protocol.wants_idle_tick()
+                                ? pdMS_TO_TICKS(20)
+                                : portMAX_DELAY;
+    if (xQueueReceive(link_queue, &frame, wait) == pdTRUE)
     {
       if (protocol.parse(frame))
       {
         const uint16_t n = protocol.make_reply(link_tx_buf, sizeof(link_tx_buf));
         if (n > 0U) Link_Send(link_tx_buf, n);
       }
+    }
+    else if (protocol.wants_idle_tick())
+    {
+      protocol.on_idle();
     }
   }
 }

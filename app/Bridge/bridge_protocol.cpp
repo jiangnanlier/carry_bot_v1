@@ -3,6 +3,7 @@
 #include "link_protocol.h"
 #include "zdt_public.h"
 #include "zdt_config.h"
+#include "zdt_protocol.h"
 #include "servo_public.h"
 #include "servo_config.h"
 
@@ -99,6 +100,23 @@ public:
     default_addr_ = BRIDGE_DEFAULT_ADDR;
     line_len_ = 0U;
     reply_len_ = 0U;
+    telem_on_ = false;
+    telem_idx_ = 0U;
+    telem_next_tick_ = 0;
+  }
+
+  bool wants_idle_tick() override { return telem_on_; }
+
+  void on_idle() override
+  {
+    if (!telem_on_) return;
+    const TickType_t now = xTaskGetTickCount();
+    if (telem_next_tick_ != 0 &&
+        (TickType_t)(now - telem_next_tick_) < pdMS_TO_TICKS(BRIDGE_TELEM_PERIOD_MS / 4U))
+      return;
+    /* One wheel per quarter-period so USART6 stays responsive (~1 Hz all-four). */
+    handle_telem_one();
+    telem_next_tick_ = now;
   }
 
   bool parse(const LinkFrame &frame) override
@@ -218,6 +236,20 @@ private:
       handle_test_fwd();
       return;
     }
+    if (eq_ci(p, "telem") || eq_ci(p, "telem1") || eq_ci(p, "W?"))
+    {
+      telem_on_ = true;
+      telem_idx_ = 0U;
+      telem_next_tick_ = 0;
+      append_line("OK TELEM on wheels=3-6 cmd=0x36 period=1Hz");
+      return;
+    }
+    if (eq_ci(p, "telem0") || eq_ci(p, "W0"))
+    {
+      telem_on_ = false;
+      append_line("OK TELEM off");
+      return;
+    }
 
     const char head = to_upper(*p);
     if (head == 'M')
@@ -230,7 +262,7 @@ private:
       handle_servo(p + 1);
       return;
     }
-    append_line("ERR unknown, send M? or SH or test");
+    append_line("ERR unknown, send M? or SH or test or telem");
   }
 
   void flush_reply()
@@ -251,6 +283,48 @@ private:
       case HAL_BUSY:    return "BUSY";
       default:          return "FAIL";
     }
+  }
+
+
+  void handle_telem_one()
+  {
+    static const uint8_t kWheels[] = {
+      ZDT_ADDR_WHEEL_FL, ZDT_ADDR_WHEEL_RL,
+      ZDT_ADDR_WHEEL_FR, ZDT_ADDR_WHEEL_RR
+    };
+    const uint8_t addr = kWheels[telem_idx_ & 3U];
+    telem_idx_ = static_cast<uint8_t>((telem_idx_ + 1U) & 3U);
+
+    char rxhex[48];
+    uint8_t raw[ZDT_FRAME_MAX];
+    int32_t pos = 0;
+
+    const HAL_StatusTypeDef st =
+        Zdt_ReadAndWait(addr, ZDT_CMD_READ_POS, BRIDGE_TELEM_READ_MS);
+    const uint16_t nraw = Zdt_CopyLastRx(raw, sizeof(raw));
+    (void)Zdt_FormatLastRx(rxhex, sizeof(rxhex));
+
+    reply_len_ = 0U;
+    if (st == HAL_TIMEOUT || nraw == 0U)
+    {
+      reply_fmt("W%u TIMEOUT rx=%s", static_cast<unsigned>(addr), rxhex);
+    }
+    else if (st != HAL_OK)
+    {
+      reply_fmt("W%u FAIL st=%s rx=%s", static_cast<unsigned>(addr), ack_tag(st), rxhex);
+    }
+    else if (ZdtProto_ParseReadPos(raw, nraw, addr, &pos) != 0)
+    {
+      reply_fmt("W%u ACK rx=%s pos=%ld", static_cast<unsigned>(addr), rxhex,
+                static_cast<long>(pos));
+    }
+    else
+    {
+      /* Got bytes but not a clean 0x36 frame — still useful for wire debug. */
+      reply_fmt("W%u FAIL rx=%s (no pos frame)", static_cast<unsigned>(addr), rxhex);
+    }
+    flush_reply();
+    vTaskDelay(pdMS_TO_TICKS(BRIDGE_TELEM_GAP_MS));
   }
 
   void handle_test_fwd()
@@ -356,7 +430,7 @@ private:
 
     if (*p == '?' || to_upper(*p) == 'H')
     {
-      append_line("OK A-tier: M? ME0/1 MG[+|-]deg MX MS[n] ML MJ S? S0U/S1U S0C/S0O/S1M test");
+      append_line("OK A-tier: M? ME0/1 MG[+|-]deg MX MS[n] ML MJ S? S0U/S1U S0C/S0O/S1M test telem/telem0");
       append_line("addr 1=lift 2=turn 3-6=wheels *=bcast default=2");
       return;
     }
@@ -505,7 +579,7 @@ private:
         break;
       }
       case '?':
-        append_line("OK A-tier: M? ME0/1 MG[+|-]deg MX MS[n] ML MJ test");
+        append_line("OK A-tier: M? ME0/1 MG[+|-]deg MX MS[n] ML MJ test telem/telem0");
         break;
       default:
         append_line("ERR unknown M cmd, send M?");
@@ -634,6 +708,9 @@ private:
   uint16_t line_len_;
   uint8_t reply_[BRIDGE_REPLY_MAX];
   uint16_t reply_len_;
+  bool telem_on_;
+  uint8_t telem_idx_;
+  TickType_t telem_next_tick_;
 };
 
 BridgeProtocol protocol;

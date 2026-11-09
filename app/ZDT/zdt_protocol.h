@@ -46,6 +46,8 @@ uint8_t ZdtProto_EncodeVel(uint8_t *out, uint8_t capacity, const ZdtSlot *slot);
 uint8_t ZdtProto_EncodeZero(uint8_t *out, uint8_t capacity, uint8_t addr);
 uint8_t ZdtProto_EncodeRead(uint8_t *out, uint8_t capacity, uint8_t addr, uint8_t cmd);
 int ZdtProto_FindAck(const uint8_t *data, uint16_t len, ZdtAck *ack);
+/* Emm read-pos reply: Addr 0x36 sign pos[4] 0x6B. Returns 1 on match. */
+int ZdtProto_ParseReadPos(const uint8_t *data, uint16_t len, uint8_t expect_addr, int32_t *pos_out);
 uint32_t ZdtProto_DegToPulses(uint32_t abs_deg);
 
 #ifdef __cplusplus

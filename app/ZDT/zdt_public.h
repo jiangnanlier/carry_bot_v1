@@ -34,9 +34,16 @@ HAL_StatusTypeDef Zdt_GoDegAndWait(uint8_t addr, int32_t deg, uint32_t timeout_m
 HAL_StatusTypeDef Zdt_VelAndWait(uint8_t addr, uint8_t dir, uint16_t vel_rpm, uint32_t timeout_ms);
 HAL_StatusTypeDef Zdt_StopAndWait(uint8_t addr, uint32_t timeout_ms);
 
+/* Read register/cmd (Emm 0x35/0x36/0x3A...). Does not wait. */
+HAL_StatusTypeDef Zdt_Read(uint8_t addr, uint8_t cmd);
+
+/* Send read and wait for ANY USART1 IDLE frame (not only 02 ACK). */
+HAL_StatusTypeDef Zdt_ReadAndWait(uint8_t addr, uint8_t cmd, uint32_t timeout_ms);
+
 /* Debug: last USART1 IDLE frame as "aa bb cc" (empty string if none). */
 void Zdt_ClearLastRx(void);
 uint16_t Zdt_FormatLastRx(char *out, uint16_t capacity);
+uint16_t Zdt_CopyLastRx(uint8_t *out, uint16_t capacity);
 
 /* Unified UART dispatch hooks (Instance == USART1) */
 void Zdt_UART_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size);

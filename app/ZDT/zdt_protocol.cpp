@@ -103,3 +103,22 @@ extern "C" int ZdtProto_FindAck(const uint8_t *data, uint16_t len, ZdtAck *ack)
   }
   return 0;
 }
+
+extern "C" int ZdtProto_ParseReadPos(const uint8_t *data, uint16_t len, uint8_t expect_addr, int32_t *pos_out)
+{
+  if (data == nullptr || pos_out == nullptr || len < 8U) return 0;
+  for (uint16_t i = 0U; i + 7U < len; ++i)
+  {
+    if (data[i] != expect_addr) continue;
+    if (data[i + 1U] != ZDT_CMD_READ_POS) continue;
+    if (data[i + 7U] != ZDT_TAIL) continue;
+    const uint8_t sign = data[i + 2U];
+    uint32_t mag = (static_cast<uint32_t>(data[i + 3U]) << 24) |
+                   (static_cast<uint32_t>(data[i + 4U]) << 16) |
+                   (static_cast<uint32_t>(data[i + 5U]) << 8) |
+                   static_cast<uint32_t>(data[i + 6U]);
+    *pos_out = (sign != 0U) ? -static_cast<int32_t>(mag) : static_cast<int32_t>(mag);
+    return 1;
+  }
+  return 0;
+}

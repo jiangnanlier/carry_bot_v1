@@ -25,6 +25,7 @@ ZdtSlot slots[ZDT_SLOT_MAX];
 volatile uint8_t wait_addr = 0xFFU;
 volatile uint8_t wait_cmd  = 0x00U;
 volatile uint8_t last_ack_ok = 0U;
+volatile uint8_t wait_any_rx = 0U;
 
 uint8_t last_rx_copy[ZDT_FRAME_MAX];
 volatile uint16_t last_rx_len = 0U;
@@ -98,6 +99,17 @@ HAL_StatusTypeDef send_frame(const uint8_t *data, uint16_t len)
 
 void note_ack_from_frame(const ZdtFrame &frame)
 {
+  if (wait_any_rx != 0U)
+  {
+    last_ack_ok = 1U;
+    if (zdt_ack_sem != nullptr)
+    {
+      BaseType_t woken = pdFALSE;
+      xSemaphoreGiveFromISR(zdt_ack_sem, &woken);
+      portYIELD_FROM_ISR(woken);
+    }
+    return;
+  }
   ZdtAck ack{};
   if (!ZdtProto_FindAck(frame.data, frame.len, &ack)) return;
   if (ack.addr == wait_addr && ack.cmd == wait_cmd && ack.status == ZDT_ACK_OK)
@@ -278,6 +290,43 @@ extern "C" HAL_StatusTypeDef Zdt_GoDegAndWait(uint8_t addr, int32_t deg, uint32_
   return (last_ack_ok != 0U) ? HAL_OK : HAL_ERROR;
 }
 
+extern "C" HAL_StatusTypeDef Zdt_Read(uint8_t addr, uint8_t cmd)
+{
+  uint8_t f[3];
+  const uint8_t n = ZdtProto_EncodeRead(f, sizeof(f), addr, cmd);
+  if (n == 0U) return HAL_ERROR;
+  return send_frame(f, n);
+}
+
+extern "C" HAL_StatusTypeDef Zdt_ReadAndWait(uint8_t addr, uint8_t cmd, uint32_t timeout_ms)
+{
+  if (zdt_ack_sem == nullptr) return HAL_ERROR;
+  if (addr == ZDT_ADDR_BROADCAST) return HAL_ERROR;
+  Zdt_ClearLastRx();
+  wait_addr = addr;
+  wait_cmd = cmd;
+  wait_any_rx = 1U;
+  last_ack_ok = 0U;
+  (void)xSemaphoreTake(zdt_ack_sem, 0);
+
+  const HAL_StatusTypeDef st = Zdt_Read(addr, cmd);
+  if (st != HAL_OK)
+  {
+    wait_any_rx = 0U;
+    wait_addr = 0xFFU;
+    return st;
+  }
+  if (xSemaphoreTake(zdt_ack_sem, pdMS_TO_TICKS(timeout_ms)) != pdTRUE)
+  {
+    wait_any_rx = 0U;
+    wait_addr = 0xFFU;
+    return HAL_TIMEOUT;
+  }
+  wait_any_rx = 0U;
+  wait_addr = 0xFFU;
+  return (last_rx_len > 0U) ? HAL_OK : HAL_ERROR;
+}
+
 extern "C" void Zdt_ClearLastRx(void)
 {
   last_rx_len = 0U;
@@ -307,6 +356,17 @@ extern "C" uint16_t Zdt_FormatLastRx(char *out, uint16_t capacity)
   out[pos] = '\0';
   return pos;
 }
+
+extern "C" uint16_t Zdt_CopyLastRx(uint8_t *out, uint16_t capacity)
+{
+  if (out == nullptr || capacity == 0U) return 0U;
+  const uint16_t n = last_rx_len;
+  if (n == 0U) return 0U;
+  const uint16_t copy = (n < capacity) ? n : capacity;
+  std::memcpy(out, last_rx_copy, copy);
+  return copy;
+}
+
 
 extern "C" HAL_StatusTypeDef Zdt_VelAndWait(uint8_t addr, uint8_t dir, uint16_t vel_rpm, uint32_t timeout_ms)
 {
@@ -392,7 +452,12 @@ extern "C" void StartZdtTask(void *argument)
     if (xQueueReceive(zdt_rx_queue, &frame, portMAX_DELAY) == pdTRUE)
     {
       ZdtAck ack{};
-      if (ZdtProto_FindAck(frame.data, frame.len, &ack))
+      if (wait_any_rx != 0U)
+      {
+        last_ack_ok = 1U;
+        (void)xSemaphoreGive(zdt_ack_sem);
+      }
+      else if (ZdtProto_FindAck(frame.data, frame.len, &ack))
       {
         if (ack.addr == wait_addr && ack.cmd == wait_cmd && ack.status == ZDT_ACK_OK)
         {

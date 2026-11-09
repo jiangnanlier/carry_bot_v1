@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include "bmi088.h"
 #include "ist8310.h"
+#include "wheel_ahrs.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -19,6 +20,8 @@ extern volatile uint32_t g_bmi088_ok_count;
 extern ist8310_t g_ist8310;
 extern volatile uint8_t g_ist8310_last_err;
 extern volatile uint32_t g_ist8310_ok_count;
+
+extern wheel_ahrs_state_t g_wheel_ahrs;
 
 void StartImuTask(void *argument);
 

@@ -41,6 +41,7 @@ add_subdirectory(cmake/stm32cubemx)
 add_subdirectory(BSP/Board)
 add_subdirectory(UserLib/BMI088)
 add_subdirectory(UserLib/IST8310)
+add_subdirectory(UserLib/AHRS)
 add_subdirectory(Applications)
 add_subdirectory(app/BT)
 
@@ -74,6 +75,7 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     bsp_board
     userlib_bmi088
     userlib_ist8310
+    userlib_ahrs
     applications
 
     # Add user defined libraries

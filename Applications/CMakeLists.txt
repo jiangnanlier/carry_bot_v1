@@ -19,4 +19,5 @@ target_link_libraries(applications PUBLIC
   bsp_board
   userlib_bmi088
   userlib_ist8310
+  userlib_ahrs
 )

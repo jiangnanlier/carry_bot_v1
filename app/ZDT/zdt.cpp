@@ -29,6 +29,7 @@ volatile uint8_t wait_any_rx = 0U;
 
 uint8_t last_rx_copy[ZDT_FRAME_MAX];
 volatile uint16_t last_rx_len = 0U;
+Zdt_RxHook rx_hook = nullptr;
 
 const uint8_t kPresetAddrs[] = {
   ZDT_ADDR_LIFT,
@@ -134,6 +135,11 @@ void smoke_me_mg()
 #endif
 
 } // namespace
+
+extern "C" void Zdt_SetRxHook(Zdt_RxHook hook)
+{
+  rx_hook = hook;
+}
 
 extern "C" HAL_StatusTypeDef Zdt_SendRaw(const uint8_t *data, uint16_t len)
 {
@@ -451,6 +457,9 @@ extern "C" void StartZdtTask(void *argument)
   {
     if (xQueueReceive(zdt_rx_queue, &frame, portMAX_DELAY) == pdTRUE)
     {
+      if (rx_hook != nullptr && frame.len > 0U)
+        rx_hook(frame.data, frame.len);
+
       ZdtAck ack{};
       if (wait_any_rx != 0U)
       {

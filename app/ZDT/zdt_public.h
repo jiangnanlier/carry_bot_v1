@@ -45,6 +45,10 @@ void Zdt_ClearLastRx(void);
 uint16_t Zdt_FormatLastRx(char *out, uint16_t capacity);
 uint16_t Zdt_CopyLastRx(uint8_t *out, uint16_t capacity);
 
+/* Optional raw RX hook (called from ZDT task, not ISR). Used by USART1 sniff forward. */
+typedef void (*Zdt_RxHook)(const uint8_t *data, uint16_t len);
+void Zdt_SetRxHook(Zdt_RxHook hook);
+
 /* Unified UART dispatch hooks (Instance == USART1) */
 void Zdt_UART_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size);
 void Zdt_UART_ErrorCallback(UART_HandleTypeDef *huart);

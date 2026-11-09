@@ -40,6 +40,7 @@ add_subdirectory(cmake/stm32cubemx)
 # Add user libraries
 add_subdirectory(app/Link)
 add_subdirectory(app/ZDT)
+add_subdirectory(app/Servo)
 
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
@@ -69,6 +70,7 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
     stm32cubemx
     link
     zdt
+    servo
 
     # Add user defined libraries
 )

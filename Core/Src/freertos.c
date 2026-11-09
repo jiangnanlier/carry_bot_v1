@@ -29,6 +29,8 @@
 #include "link_config.h"
 #include "zdt_public.h"
 #include "zdt_config.h"
+#include "servo_public.h"
+#include "servo_config.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -61,6 +63,13 @@ const osThreadAttr_t zdtTask_attributes = {
   .name = "zdtTask",
   .stack_size = ZDT_TASK_STACK_SIZE,
   .priority = (osPriority_t) ZDT_TASK_PRIORITY,
+};
+/* Definitions for servoTask */
+osThreadId_t servoTaskHandle;
+const osThreadAttr_t servoTask_attributes = {
+  .name = "servoTask",
+  .stack_size = SERVO_TASK_STACK_SIZE,
+  .priority = (osPriority_t) SERVO_TASK_PRIORITY,
 };
 /* USER CODE END Variables */
 /* Definitions for defaultTask */
@@ -113,6 +122,7 @@ void MX_FREERTOS_Init(void) {
   /* USER CODE BEGIN RTOS_THREADS */
   linkTaskHandle = osThreadNew(StartLinkTask, NULL, &linkTask_attributes);
   zdtTaskHandle = osThreadNew(StartZdtTask, NULL, &zdtTask_attributes);
+  servoTaskHandle = osThreadNew(StartServoTask, NULL, &servoTask_attributes);
   /* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */
@@ -143,4 +153,3 @@ void StartDefaultTask(void *argument)
 /* USER CODE BEGIN Application */
 
 /* USER CODE END Application */
-

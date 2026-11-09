@@ -28,7 +28,7 @@
                 "-f",
                 "openocd.cfg",
                 "-c",
-                "program build/Debug/${workspaceFolderBasename}.elf verify reset exit"
+                "program build/Debug/carry_bot_v1.elf verify reset exit"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"

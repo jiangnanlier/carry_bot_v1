@@ -25,12 +25,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "link_public.h"
-#include "link_config.h"
-#include "zdt_public.h"
-#include "zdt_config.h"
-#include "servo_public.h"
-#include "servo_config.h"
+#include "usart.h"
+#include <string.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -50,28 +46,6 @@
 
 /* Private variables ---------------------------------------------------------*/
 /* USER CODE BEGIN Variables */
-/* Definitions for linkTask */
-osThreadId_t linkTaskHandle;
-const osThreadAttr_t linkTask_attributes = {
-  .name = "linkTask",
-  .stack_size = LINK_TASK_STACK_SIZE,
-  .priority = (osPriority_t) LINK_TASK_PRIORITY,
-};
-/* Definitions for zdtTask */
-osThreadId_t zdtTaskHandle;
-const osThreadAttr_t zdtTask_attributes = {
-  .name = "zdtTask",
-  .stack_size = ZDT_TASK_STACK_SIZE,
-  .priority = (osPriority_t) ZDT_TASK_PRIORITY,
-};
-/* Definitions for servoTask */
-osThreadId_t servoTaskHandle;
-const osThreadAttr_t servoTask_attributes = {
-  .name = "servoTask",
-  .stack_size = SERVO_TASK_STACK_SIZE,
-  .priority = (osPriority_t) SERVO_TASK_PRIORITY,
-};
-/* USER CODE END Variables */
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
 const osThreadAttr_t defaultTask_attributes = {
@@ -120,10 +94,8 @@ void MX_FREERTOS_Init(void) {
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
 
   /* USER CODE BEGIN RTOS_THREADS */
-  linkTaskHandle = osThreadNew(StartLinkTask, NULL, &linkTask_attributes);
-  zdtTaskHandle = osThreadNew(StartZdtTask, NULL, &zdtTask_attributes);
-  servoTaskHandle = osThreadNew(StartServoTask, NULL, &servoTask_attributes);
-  /* USER CODE END RTOS_THREADS */
+  /* hello-tx diagnostic: do not start Link/ZDT/Servo */
+/* USER CODE END RTOS_THREADS */
 
   /* USER CODE BEGIN RTOS_EVENTS */
   /* add events, ... */
@@ -141,10 +113,12 @@ void MX_FREERTOS_Init(void) {
 void StartDefaultTask(void *argument)
 {
   /* USER CODE BEGIN StartDefaultTask */
-  /* Infinite loop */
+  /* Shell UART2 = USART1 @115200 TX (PA9) */
+  static const char msg[] = "hello\r\n";
   for(;;)
   {
-    osDelay(1);
+    (void)HAL_UART_Transmit(&huart1, (uint8_t *)msg, (uint16_t)(sizeof(msg) - 1U), 100);
+    osDelay(500);
   }
   /* USER CODE END StartDefaultTask */
 }

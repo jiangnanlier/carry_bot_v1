@@ -669,7 +669,7 @@ private:
           s->last_deg = delta;
           if (delta > 0) s->dir = 1U;
           else if (delta < 0) s->dir = 0U;
-          vTaskDelay(pdMS_TO_TICKS(BRIDGE_TEST_GAP_MS));
+          vTaskDelay(pdMS_TO_TICKS(BRIDGE_MA_SETTLE_MS));
           slot_refresh_driver_pos(s);
           if (s->drv_valid == 0U) s->fallback_deg = target;
         }

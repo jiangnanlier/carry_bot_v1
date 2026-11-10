@@ -146,18 +146,8 @@ extern "C" HAL_StatusTypeDef Zdt_GoPosUnits(uint8_t addr, int32_t delta_units)
 {
   if (delta_units == 0) return HAL_OK;
   ZdtSlot *s = slot_find(addr);
-  uint8_t up;
-  uint32_t clk;
-  if (delta_units < 0)
-  {
-    up = 0U;
-    clk = static_cast<uint32_t>(-delta_units);
-  }
-  else
-  {
-    up = 1U;
-    clk = static_cast<uint32_t>(delta_units);
-  }
+  const uint8_t up = Zdt_PosWireDirBit(addr, delta_units);
+  const uint32_t clk = static_cast<uint32_t>(delta_units < 0 ? -delta_units : delta_units);
   s->dir = up ? 1U : 0U;
   if (addr != ZDT_ADDR_BROADCAST) s->addr = addr;
   ZdtSlot wire = *s;
@@ -299,20 +289,10 @@ extern "C" HAL_StatusTypeDef Zdt_GoDeg(uint8_t addr, int32_t deg)
 
   deg = Zdt_ApplyDirDeg(addr, deg);
 
-  if (deg < 0)
-  {
-    up = 0U;
-    abs_deg = static_cast<uint32_t>(-deg);
-  }
-  else if (deg > 0)
-  {
-    up = 1U;
-    abs_deg = static_cast<uint32_t>(deg);
-  }
-  else
-  {
-    return HAL_OK;
-  }
+  if (deg == 0) return HAL_OK;
+
+  up = Zdt_PosWireDirBit(addr, deg);
+  abs_deg = static_cast<uint32_t>(deg < 0 ? -deg : deg);
 
   s->dir = up ? 1U : 0U;
   if (addr != ZDT_ADDR_BROADCAST) s->addr = addr;

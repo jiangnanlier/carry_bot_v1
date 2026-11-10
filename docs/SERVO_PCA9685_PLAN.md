@@ -1,14 +1,14 @@
 # Servo / PCA9685 移植计划与实现说明
 
 > 分支：`feature/servo-pca9685`  
-> 更新：2026-11-09  
+> 更新：2026-11-10（I2C1 PB8/PB9 → I2C2 PF0/PF1，Type-C 定制 IO）  
 > 参考：`CubeMx/I2C`（F103 调参工程）、`docs/PCA9685`、`USART/COMMANDS.md` §5、`docs/DEVELOPMENT.md`
 
 ## 1. 目标
 
 在 `carry_bot_v1`（F407 + FreeRTOS）落地 `app/Servo`：
 
-- 总线：`I2C1` → PCA9685（地址 `0x40`）
+- 总线：`I2C2` → PCA9685（地址 `0x40`）
 - 通道：`CH0` 机械爪夹紧 / `CH1` 物料转盘
 - 对 Bridge 暴露同步友好的 C API；**不**在本分支解析蓝牙 `S*` 命令（属 `feature/bridge-bt-commands`）
 
@@ -16,13 +16,13 @@
 
 | 信号 | F407 引脚 | 备注 |
 |---|---|---|
-| I2C1_SCL | **PB8** | Fast 400 kHz，开漏 AF4 |
-| I2C1_SDA | **PB9** | 同上 |
-| DMA RX | DMA1 Stream0 / CH1 | `I2C1_RX` |
-| DMA TX | DMA1 Stream6 / CH1 | `I2C1_TX` |
-| NVIC | I2C1_EV 优先级 **5** | 符合 RTOS 5–15 |
+| I2C2_SDA | **PF0** | Fast 400 kHz，开漏 AF4 |
+| I2C2_SCL | **PF1** | 同上 |
+| DMA RX | DMA1 Stream2 / CH3 | `I2C2_RX` |
+| DMA TX | DMA1 Stream7 / CH7 | `I2C2_TX` |
+| NVIC | I2C2_EV 优先级 **5** | 符合 RTOS 5–15 |
 
-> 对照：`CubeMx/I2C`（F103）用的是 **PB6/PB7**。上板接线按 **本仓 PB8/PB9**，不要照抄 F103 丝印。
+> RoboMaster C 板 Type-C **可定制 IO** 口；板载 I2C2 上拉。`PB8/PB9`（相机 FPC I2C1）已释放给相机总线。
 
 PCA9685：
 
@@ -45,11 +45,11 @@ PCA9685：
 ## 4. 软件架构
 
 ```
-Bridge (later)  --Servo_Set*-->  queue  -->  servoTask  --mutex-->  I2C1 Mem_*_DMA  --> PCA9685
+Bridge (later)  --Servo_Set*-->  queue  -->  servoTask  --mutex-->  I2C2 Mem_*_DMA  --> PCA9685
 Link / ZDT      (USART DMA)                不碰 I2C 回调
 ```
 
-- **唯一** I2C 完成回调：`HAL_I2C_MemTxCpltCallback` / `MemRxCpltCallback` / `ErrorCallback`（仅 `Instance==I2C1`），放在 `pca9685.cpp`
+- **唯一** I2C 完成回调：`HAL_I2C_MemTxCpltCallback` / `MemRxCpltCallback` / `ErrorCallback`（仅 `Instance==I2C2`），放在 `pca9685.cpp`
 - 总线 mutex + 完成二进制信号量；禁止在 ISR 里直接 `Mem_Write`
 - UART 回调仍由 Link（及日后合入的 ZDT 分发）独占；Servo **零** UART 钩子
 - `SERVO_REQUIRE_DEVICE=1`：初始化 `IsDeviceReady` 失败则 `Servo_IsReady()==0`，任务软挂起，不 `Error_Handler`
@@ -85,8 +85,8 @@ Link / ZDT      (USART DMA)                不碰 I2C 回调
 
 | 风险 | 对策 |
 |---|---|
-| 重生工程丢 I2C DMA | 核对 Stream0/6 与 `__HAL_LINKDMA` |
-| I2C1_ER 未开 | 现仅 EV；超时路径 `Master_Abort_IT`；若 NACK 挂死再开 ER |
+| 重生工程丢 I2C DMA | 核对 Stream2/7 与 `__HAL_LINKDMA` |
+| I2C2_ER 未开 | 现仅 EV；超时路径 `Master_Abort_IT`；若 NACK 挂死再开 ER |
 | 回调重复定义 | Servo 独占 I2C 回调；其他模块勿再写 `HAL_I2C_*Callback` |
 | 阻塞 `HAL_Delay` | 驱动内改 `vTaskDelay` |
 | 与 ZDT 合入冲突 | 本分支不改 `app/ZDT` / UART 分发；合 main 时只冲突 `freertos.c` USER 区 |
@@ -106,5 +106,5 @@ Link / ZDT      (USART DMA)                不碰 I2C 回调
 
 1. CH1 转盘 270° 端点脉宽尚未在实车上标定（I2C 工程记「待 11-09 试」）
 2. 是否在 Servo 内做自动摆动（`A/C/S/D/T`），还是只留绝对 `U`、摆动由 Bridge 定时调用？
-3. 是否启用 `I2C1_ER_IRQn` 以完善 NACK/仲裁丢失回调？
+3. 是否启用 `I2C2_ER_IRQn` 以完善 NACK/仲裁丢失回调？
 4. 上电默认：当前 `SERVO_BOOT_APPLY=1` 夹爪开、转盘中；量产是否改为「无输出直到首条命令」？

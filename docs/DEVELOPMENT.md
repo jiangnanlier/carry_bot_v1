@@ -24,7 +24,7 @@
                                  ├─ app/Link     上位机链路（已有）
                                  ├─ app/Bridge   字符命令 → 业务（待建）
                                  ├─ app/ZDT      USART1 → Emm V5 电机总线（待建）
-                                 ├─ app/Servo    I2C1 → PCA9685 夹爪/转盘（待建）
+                                 ├─ app/Servo    I2C2 → PCA9685 夹爪/转盘
                                  └─ app/Motion   麦轮运动学（待建）
 K230 VisionModule ──(另开 UART，勿占 USART1/6)──> 主控（待定）
 ```

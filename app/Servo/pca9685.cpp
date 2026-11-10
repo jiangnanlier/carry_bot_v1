@@ -43,7 +43,7 @@ HAL_StatusTypeDef mem_write(uint8_t reg, const uint8_t *data, uint16_t len)
   s_xfer_st = HAL_OK;
 
   HAL_StatusTypeDef st = HAL_I2C_Mem_Write_DMA(
-      &hi2c1, SERVO_I2C_ADDR, reg, I2C_MEMADD_SIZE_8BIT,
+      &hi2c2, SERVO_I2C_ADDR, reg, I2C_MEMADD_SIZE_8BIT,
       const_cast<uint8_t *>(data), len);
   if (st != HAL_OK)
   {
@@ -54,7 +54,7 @@ HAL_StatusTypeDef mem_write(uint8_t reg, const uint8_t *data, uint16_t len)
   st = wait_xfer(pdMS_TO_TICKS(SERVO_I2C_TIMEOUT_MS));
   if (st == HAL_TIMEOUT)
   {
-    (void)HAL_I2C_Master_Abort_IT(&hi2c1, SERVO_I2C_ADDR);
+    (void)HAL_I2C_Master_Abort_IT(&hi2c2, SERVO_I2C_ADDR);
     unlock_bus();
     return HAL_TIMEOUT;
   }
@@ -71,7 +71,7 @@ HAL_StatusTypeDef mem_read(uint8_t reg, uint8_t *data, uint16_t len)
   s_xfer_st = HAL_OK;
 
   HAL_StatusTypeDef st = HAL_I2C_Mem_Read_DMA(
-      &hi2c1, SERVO_I2C_ADDR, reg, I2C_MEMADD_SIZE_8BIT, data, len);
+      &hi2c2, SERVO_I2C_ADDR, reg, I2C_MEMADD_SIZE_8BIT, data, len);
   if (st != HAL_OK)
   {
     unlock_bus();
@@ -81,7 +81,7 @@ HAL_StatusTypeDef mem_read(uint8_t reg, uint8_t *data, uint16_t len)
   st = wait_xfer(pdMS_TO_TICKS(SERVO_I2C_TIMEOUT_MS));
   if (st == HAL_TIMEOUT)
   {
-    (void)HAL_I2C_Master_Abort_IT(&hi2c1, SERVO_I2C_ADDR);
+    (void)HAL_I2C_Master_Abort_IT(&hi2c2, SERVO_I2C_ADDR);
     unlock_bus();
     return HAL_TIMEOUT;
   }
@@ -165,7 +165,7 @@ HAL_StatusTypeDef Pca9685_Init(float freq_hz)
   if (s_bus_mtx == nullptr || s_xfer_done == nullptr) return HAL_ERROR;
 
 #if SERVO_REQUIRE_DEVICE
-  if (HAL_I2C_IsDeviceReady(&hi2c1, SERVO_I2C_ADDR, SERVO_READY_RETRIES,
+  if (HAL_I2C_IsDeviceReady(&hi2c2, SERVO_I2C_ADDR, SERVO_READY_RETRIES,
                             SERVO_I2C_TIMEOUT_MS) != HAL_OK)
     return HAL_ERROR;
 #endif
@@ -178,7 +178,7 @@ HAL_StatusTypeDef Pca9685_Init(float freq_hz)
 
 extern "C" void HAL_I2C_MemTxCpltCallback(I2C_HandleTypeDef *hi2c)
 {
-  if (hi2c == nullptr || hi2c->Instance != I2C1) return;
+  if (hi2c == nullptr || hi2c->Instance != I2C2) return;
   s_xfer_st = HAL_OK;
   if (s_xfer_done != nullptr)
   {
@@ -190,7 +190,7 @@ extern "C" void HAL_I2C_MemTxCpltCallback(I2C_HandleTypeDef *hi2c)
 
 extern "C" void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c)
 {
-  if (hi2c == nullptr || hi2c->Instance != I2C1) return;
+  if (hi2c == nullptr || hi2c->Instance != I2C2) return;
   s_xfer_st = HAL_OK;
   if (s_xfer_done != nullptr)
   {
@@ -202,7 +202,7 @@ extern "C" void HAL_I2C_MemRxCpltCallback(I2C_HandleTypeDef *hi2c)
 
 extern "C" void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
 {
-  if (hi2c == nullptr || hi2c->Instance != I2C1) return;
+  if (hi2c == nullptr || hi2c->Instance != I2C2) return;
   s_xfer_st = HAL_ERROR;
   if (s_xfer_done != nullptr)
   {

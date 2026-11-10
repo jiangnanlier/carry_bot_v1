@@ -1,4 +1,4 @@
-# app/Servo: PCA9685 on I2C1 (DMA + mutex), CH0 clamp / CH1 turntable
+# app/Servo: PCA9685 on I2C2 (DMA + mutex), CH0 clamp / CH1 turntable
 add_library(servo INTERFACE)
 
 target_sources(servo INTERFACE

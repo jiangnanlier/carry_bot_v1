@@ -1,7 +1,7 @@
 ﻿#ifndef __SERVO_CONFIG_H
 #define __SERVO_CONFIG_H
 
-/* I2C1 PCA9685: PB8=SCL PB9=SDA @ 400 kHz, 7-bit addr 0x40 (HAL 0x80) */
+/* I2C2 PCA9685: PF0=SDA PF1=SCL (Type-C IO) @ 400 kHz, 7-bit addr 0x40 (HAL 0x80) */
 
 #define SERVO_I2C_ADDR_7BIT       0x40U
 #define SERVO_I2C_ADDR            (SERVO_I2C_ADDR_7BIT << 1)

@@ -4,7 +4,7 @@
 #include "main.h"
 #include <stdint.h>
 
-/* I2C1 -> PCA9685: CH0 clamp / CH1 turntable. Bridge parses S* later. */
+/* I2C2 -> PCA9685: CH0 clamp / CH1 turntable. Bridge parses S* later. */
 
 #ifdef __cplusplus
 extern "C" {

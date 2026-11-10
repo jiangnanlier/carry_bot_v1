@@ -183,13 +183,34 @@ bool frame_matches_query(const ZdtFrame &frame)
   return false;
 }
 
+bool last_rx_matches_query(void)
+{
+  ZdtFrame frame{};
+  uint16_t n = 0U;
+  taskENTER_CRITICAL();
+  n = last_rx_len;
+  if (n > ZDT_FRAME_MAX) n = ZDT_FRAME_MAX;
+  frame.len = n;
+  if (n > 0U) std::memcpy(frame.data, last_rx_copy, n);
+  taskEXIT_CRITICAL();
+  return frame_matches_query(frame);
+}
+
+HAL_StatusTypeDef send_frame_with_retry(const uint8_t *data, uint16_t len)
+{
+  for (uint8_t attempt = 0U; attempt < 8U; ++attempt)
+  {
+    const HAL_StatusTypeDef st = send_frame(data, len);
+    if (st != HAL_BUSY) return st;
+    vTaskDelay(pdMS_TO_TICKS(2U));
+  }
+  return HAL_BUSY;
+}
+
 void note_wait_from_frame(const ZdtFrame &frame, BaseType_t *woken)
 {
-  if (wait_kind == 3U)
-  {
-    if (frame_matches_query(frame)) give_wait_sem(woken);
-    return;
-  }
+  /* wait_kind==3: QueryRead polls last_rx_copy; do not sem-post (ISR+task dup). */
+  if (wait_kind == 3U) return;
   if (wait_kind == 2U)
   {
     ZdtPosRead pos{};
@@ -336,14 +357,19 @@ extern "C" HAL_StatusTypeDef Zdt_WaitAck(uint8_t addr, uint8_t cmd, uint32_t tim
 
 extern "C" HAL_StatusTypeDef Zdt_QueryRead(uint8_t addr, uint8_t cmd, uint32_t timeout_ms)
 {
-  if (zdt_ack_sem == nullptr) return HAL_ERROR;
   if (addr == ZDT_ADDR_BROADCAST) return HAL_ERROR;
 
+  if (zdt_rx_queue != nullptr)
+  {
+    ZdtFrame junk{};
+    while (xQueueReceive(zdt_rx_queue, &junk, 0) == pdTRUE) { /* drop stale */ }
+  }
+
+  Zdt_ClearLastRx();
   wait_kind = 3U;
   wait_addr = addr;
   wait_cmd = cmd;
   last_ack_ok = 0U;
-  (void)xSemaphoreTake(zdt_ack_sem, 0);
 
   uint8_t f[3];
   const uint8_t n = ZdtProto_EncodeRead(f, sizeof(f), addr, cmd);
@@ -353,22 +379,29 @@ extern "C" HAL_StatusTypeDef Zdt_QueryRead(uint8_t addr, uint8_t cmd, uint32_t t
     wait_addr = 0xFFU;
     return HAL_ERROR;
   }
-  const HAL_StatusTypeDef tx = send_frame(f, n);
+  const HAL_StatusTypeDef tx = send_frame_with_retry(f, n);
   if (tx != HAL_OK)
   {
     wait_kind = 0U;
     wait_addr = 0xFFU;
     return tx;
   }
-  if (xSemaphoreTake(zdt_ack_sem, pdMS_TO_TICKS(timeout_ms)) != pdTRUE)
+
+  const TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(timeout_ms);
+  while (xTaskGetTickCount() <= deadline)
   {
-    wait_kind = 0U;
-    wait_addr = 0xFFU;
-    return HAL_TIMEOUT;
+    if (last_rx_matches_query())
+    {
+      last_ack_ok = 1U;
+      wait_kind = 0U;
+      wait_addr = 0xFFU;
+      return HAL_OK;
+    }
+    vTaskDelay(pdMS_TO_TICKS(2U));
   }
   wait_kind = 0U;
   wait_addr = 0xFFU;
-  return (last_ack_ok != 0U) ? HAL_OK : HAL_ERROR;
+  return HAL_TIMEOUT;
 }
 
 extern "C" int Zdt_ParseLastRealtimePos(ZdtPosRead *out)

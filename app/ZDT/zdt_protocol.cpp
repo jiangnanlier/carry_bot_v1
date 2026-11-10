@@ -81,6 +81,27 @@ extern "C" uint8_t ZdtProto_EncodeRead(uint8_t *out, uint8_t capacity, uint8_t a
   return 3U;
 }
 
+extern "C" int ZdtProto_ParseRealtimePos(const uint8_t *data, uint16_t len, ZdtPosRead *out)
+{
+  if (data == nullptr || out == nullptr || len < 8U) return 0;
+  for (uint16_t i = 0U; i + 7U < len; ++i)
+  {
+    if (data[i + 1U] != ZDT_CMD_READ_POS) continue;
+    if (data[i + 7U] != ZDT_TAIL) continue;
+    const uint8_t sign = data[i + 2U];
+    const uint32_t raw = (static_cast<uint32_t>(data[i + 3U]) << 24) |
+                         (static_cast<uint32_t>(data[i + 4U]) << 16) |
+                         (static_cast<uint32_t>(data[i + 5U]) << 8) |
+                         static_cast<uint32_t>(data[i + 6U]);
+    int32_t units = static_cast<int32_t>(raw);
+    if (sign == 1U) units = -units;
+    out->addr = data[i];
+    out->units = units;
+    return 1;
+  }
+  return 0;
+}
+
 extern "C" int ZdtProto_FindAck(const uint8_t *data, uint16_t len, ZdtAck *ack)
 {
   if (data == nullptr || ack == nullptr || len < 4U) return 0;

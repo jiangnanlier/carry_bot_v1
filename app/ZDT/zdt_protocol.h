@@ -39,6 +39,13 @@ typedef struct
   uint8_t status;
 } ZdtAck;
 
+/* Emm 0x36 realtime position response (motor encoder units, 65536/rev). */
+typedef struct
+{
+  uint8_t  addr;
+  int32_t  units;
+} ZdtPosRead;
+
 uint8_t ZdtProto_EncodeEnable(uint8_t *out, uint8_t capacity, uint8_t addr, uint8_t on, uint8_t snF);
 uint8_t ZdtProto_EncodeStop(uint8_t *out, uint8_t capacity, uint8_t addr, uint8_t snF);
 uint8_t ZdtProto_EncodeGoPulses(uint8_t *out, uint8_t capacity, const ZdtSlot *slot, uint32_t clk);
@@ -46,6 +53,7 @@ uint8_t ZdtProto_EncodeVel(uint8_t *out, uint8_t capacity, const ZdtSlot *slot);
 uint8_t ZdtProto_EncodeZero(uint8_t *out, uint8_t capacity, uint8_t addr);
 uint8_t ZdtProto_EncodeRead(uint8_t *out, uint8_t capacity, uint8_t addr, uint8_t cmd);
 int ZdtProto_FindAck(const uint8_t *data, uint16_t len, ZdtAck *ack);
+int ZdtProto_ParseRealtimePos(const uint8_t *data, uint16_t len, ZdtPosRead *out);
 uint32_t ZdtProto_DegToPulses(uint32_t abs_deg);
 
 #ifdef __cplusplus

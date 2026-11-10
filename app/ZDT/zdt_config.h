@@ -10,6 +10,8 @@
 #define ZDT_QUEUE_LEN           8U
 #define ZDT_SLOT_MAX            8U
 #define ZDT_PULSE_PER_REV       3200U
+/* Emm read-position response: 65536 counts per mechanical revolution (manual 0x36). */
+#define ZDT_POS_UNITS_PER_REV   65536L
 #define ZDT_ACK_TIMEOUT_MS      500U
 #define ZDT_DEFAULT_VEL_RPM     300U
 #define ZDT_DEFAULT_ACC         100U

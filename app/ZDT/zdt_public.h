@@ -20,6 +20,9 @@ HAL_StatusTypeDef Zdt_Enable(uint8_t addr, uint8_t on);
 /* MG+/-deg: position mode by angle (pulses = |deg| * 3200 / 360). */
 HAL_StatusTypeDef Zdt_GoDeg(uint8_t addr, int32_t deg);
 
+/* Emm 0x36 realtime position; *deg_out in logical/cmd space (zdt_dir_map applied). */
+HAL_StatusTypeDef Zdt_ReadRealtimePosDeg(uint8_t addr, int32_t *deg_out, uint32_t timeout_ms);
+
 /* MX: immediate stop */
 HAL_StatusTypeDef Zdt_Stop(uint8_t addr);
 

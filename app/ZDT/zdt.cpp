@@ -147,6 +147,17 @@ extern "C" HAL_StatusTypeDef Zdt_Stop(uint8_t addr)
   return send_frame(f, n);
 }
 
+extern "C" HAL_StatusTypeDef Zdt_Zero(uint8_t addr)
+{
+  if (addr == ZDT_ADDR_BROADCAST) return HAL_ERROR;
+  uint8_t f[4];
+  const uint8_t n = ZdtProto_EncodeZero(f, sizeof(f), addr);
+  if (n == 0U) return HAL_ERROR;
+  ZdtSlot *s = slot_find(addr);
+  if (s != nullptr) s->pos_clk = 0;
+  return send_frame(f, n);
+}
+
 extern "C" HAL_StatusTypeDef Zdt_Vel(uint8_t addr, uint8_t dir, uint16_t vel_rpm)
 {
   ZdtSlot *s = slot_find(addr);
@@ -331,6 +342,31 @@ extern "C" HAL_StatusTypeDef Zdt_VelAndWait(uint8_t addr, uint8_t dir, uint16_t 
   {
     wait_addr = 0xFFU;
     return HAL_OK;
+  }
+  if (xSemaphoreTake(zdt_ack_sem, pdMS_TO_TICKS(timeout_ms)) != pdTRUE)
+  {
+    wait_addr = 0xFFU;
+    return HAL_TIMEOUT;
+  }
+  wait_addr = 0xFFU;
+  return (last_ack_ok != 0U) ? HAL_OK : HAL_ERROR;
+}
+
+extern "C" HAL_StatusTypeDef Zdt_ZeroAndWait(uint8_t addr, uint32_t timeout_ms)
+{
+  if (zdt_ack_sem == nullptr) return HAL_ERROR;
+  if (addr == ZDT_ADDR_BROADCAST) return HAL_ERROR;
+  Zdt_ClearLastRx();
+  wait_addr = addr;
+  wait_cmd = ZDT_CMD_ZERO;
+  last_ack_ok = 0U;
+  (void)xSemaphoreTake(zdt_ack_sem, 0);
+
+  const HAL_StatusTypeDef st = Zdt_Zero(addr);
+  if (st != HAL_OK)
+  {
+    wait_addr = 0xFFU;
+    return st;
   }
   if (xSemaphoreTake(zdt_ack_sem, pdMS_TO_TICKS(timeout_ms)) != pdTRUE)
   {

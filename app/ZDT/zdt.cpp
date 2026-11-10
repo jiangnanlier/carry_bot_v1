@@ -129,6 +129,50 @@ int32_t units_to_logical_deg(uint8_t addr, int32_t units)
   return Zdt_ApplyDirDeg(addr, static_cast<int32_t>(deg64));
 }
 
+extern "C" int32_t Zdt_WireUnitsToLogicalDeg(uint8_t addr, int32_t units)
+{
+  return units_to_logical_deg(addr, units);
+}
+
+extern "C" int32_t Zdt_LogicalDegToWireUnits(uint8_t addr, int32_t logical_deg)
+{
+  const int32_t wire_deg = Zdt_ApplyDirDeg(addr, logical_deg);
+  const int64_t u =
+      (static_cast<int64_t>(wire_deg) * static_cast<int64_t>(ZDT_POS_UNITS_PER_REV)) / 360LL;
+  return static_cast<int32_t>(u);
+}
+
+extern "C" HAL_StatusTypeDef Zdt_GoPosUnits(uint8_t addr, int32_t delta_units)
+{
+  if (delta_units == 0) return HAL_OK;
+  ZdtSlot *s = slot_find(addr);
+  uint8_t up;
+  uint32_t clk;
+  if (delta_units < 0)
+  {
+    up = 0U;
+    clk = static_cast<uint32_t>(-delta_units);
+  }
+  else
+  {
+    up = 1U;
+    clk = static_cast<uint32_t>(delta_units);
+  }
+  s->dir = up ? 1U : 0U;
+  if (addr != ZDT_ADDR_BROADCAST) s->addr = addr;
+  ZdtSlot wire = *s;
+  wire.addr = addr;
+  uint8_t f[13];
+  const uint8_t n = ZdtProto_EncodeGoPulses(f, sizeof(f), &wire, clk);
+  if (n == 0U) return HAL_ERROR;
+  if (addr != ZDT_ADDR_BROADCAST)
+  {
+    if (up) s->pos_clk += static_cast<int32_t>(clk);
+    else    s->pos_clk -= static_cast<int32_t>(clk);
+  }
+  return send_frame(f, n);
+}
+
 bool frame_matches_query(const ZdtFrame &frame)
 {
   if (frame.len < 2U) return false;

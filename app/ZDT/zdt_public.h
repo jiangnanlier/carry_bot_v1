@@ -18,8 +18,14 @@ HAL_StatusTypeDef Zdt_SendRaw(const uint8_t *data, uint16_t len);
 /* ME1 / ME0: enable / disable. addr=0 broadcast. Does not wait for ACK. */
 HAL_StatusTypeDef Zdt_Enable(uint8_t addr, uint8_t on);
 
-/* MG+/-deg: position mode by angle (pulses = |deg| * 3200 / 360). */
+/* MG+/-deg: relative 0xFD; |deg| converted with 65536 counts/rev (same as 0x36). */
 HAL_StatusTypeDef Zdt_GoDeg(uint8_t addr, int32_t deg);
+
+/* Relative 0xFD by wire encoder delta (0x36 units); no extra dir map on magnitude. */
+HAL_StatusTypeDef Zdt_GoPosUnits(uint8_t addr, int32_t delta_units);
+
+int32_t Zdt_WireUnitsToLogicalDeg(uint8_t addr, int32_t units);
+int32_t Zdt_LogicalDegToWireUnits(uint8_t addr, int32_t logical_deg);
 
 /* Emm 0x36 realtime position; *deg_out in logical/cmd space (zdt_dir_map applied). */
 HAL_StatusTypeDef Zdt_ReadRealtimePosDeg(uint8_t addr, int32_t *deg_out, uint32_t timeout_ms);

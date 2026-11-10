@@ -641,29 +641,46 @@ private:
           return;
         }
         const char *cur_src = "drv";
-        const int32_t current = slot_current_for_ma(s, &cur_src);
-        const int32_t delta = target - current;
-        const HAL_StatusTypeDef st = Zdt_GoDeg(addr, delta);
+        int32_t current = 0;
+        int32_t delta = 0;
+        int32_t delta_u = 0;
+        HAL_StatusTypeDef st = HAL_ERROR;
+        Zdt_ClearLastRx();
+        const HAL_StatusTypeDef qst =
+            Zdt_QueryRead(addr, ZDT_CMD_READ_POS, ZDT_ACK_TIMEOUT_MS);
+        ZdtPosRead pos{};
+        if (qst == HAL_OK && Zdt_ParseLastRealtimePos(&pos) != 0 && pos.addr == addr)
+        {
+          current = Zdt_WireUnitsToLogicalDeg(addr, pos.units);
+          const int32_t tgt_u = Zdt_LogicalDegToWireUnits(addr, target);
+          delta_u = tgt_u - pos.units;
+          delta = target - current;
+          st = Zdt_GoPosUnits(addr, delta_u);
+        }
+        else
+        {
+          cur_src = "fallback";
+          current = slot_current_for_ma(s, &cur_src);
+          delta = target - current;
+          st = Zdt_GoDeg(addr, delta);
+        }
         if (st == HAL_OK)
         {
           s->last_deg = delta;
           if (delta > 0) s->dir = 1U;
           else if (delta < 0) s->dir = 0U;
+          vTaskDelay(pdMS_TO_TICKS(BRIDGE_TEST_GAP_MS));
           slot_refresh_driver_pos(s);
-          if (s->drv_valid == 0U)
-          {
-            s->fallback_deg = target;
-            cur_src = "fallback";
-          }
+          if (s->drv_valid == 0U) s->fallback_deg = target;
         }
         int32_t after = s->drv_deg;
         const char *after_src = (s->drv_valid != 0U) ? "drv" : "fallback";
-        if (s->drv_valid != 0U) after = s->drv_deg;
-        else after = s->fallback_deg;
-        reply_fmt("%s MA addr=%u tgt=%ld cur=%ld(%s) d=%ld pos=%ld(%s)",
+        if (s->drv_valid == 0U) after = s->fallback_deg;
+        reply_fmt("%s MA addr=%u tgt=%ld cur=%ld(%s) d=%ld du=%ld pos=%ld(%s)",
                   hal_err(st), static_cast<unsigned>(addr),
                   static_cast<long>(target), static_cast<long>(current), cur_src,
-                  static_cast<long>(delta), static_cast<long>(after), after_src);
+                  static_cast<long>(delta), static_cast<long>(delta_u),
+                  static_cast<long>(after), after_src);
         break;
       }
       case 'R':

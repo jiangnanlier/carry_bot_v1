@@ -2,7 +2,7 @@
 
 extern "C" uint32_t ZdtProto_DegToPulses(uint32_t abs_deg)
 {
-  return static_cast<uint32_t>((static_cast<uint64_t>(abs_deg) * ZDT_PULSE_PER_REV) / 360U);
+  return static_cast<uint32_t>((static_cast<uint64_t>(abs_deg) * ZDT_POS_UNITS_PER_REV) / 360U);
 }
 
 extern "C" int32_t ZdtProto_UnitsToEmmDeg(int32_t units)

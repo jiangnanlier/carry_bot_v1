@@ -536,7 +536,7 @@ private:
     {
       append_line("OK A-tier: M? ME MG MA MX MZ MR MS ML MJ ... test test1m ver");
       append_line("MR=USART1 smoke: query 36/1F/3A dump hex on shell (lift M1R turn M2R)");
-      append_line("MA=0x36 goto+0x3A wait; tol=ZDT_MA_TOL_DEG; lift soft lim in zdt_limits.h");
+      append_line("MA=0x36 goto+0x3A wait; tol=ZDT_MA_TOL_DEG; soft lim OFF (zdt_limits.h)");
       append_line("addr 1=lift 2=turn 3-6=wheels *=bcast default=2");
       return;
     }

@@ -6,10 +6,11 @@
 
 /*
  * Soft travel limits (logical deg, same space as M<n>A / M<n>G on shell).
- * Not factory-calibrated — retune after board smoke.
+ * Default OFF — no clamp until enabled (future: BT-tunable limits).
+ * Placeholder min/max only apply when ENABLE is 1.
  */
 #ifndef ZDT_LIFT_SOFT_LIMIT_ENABLE
-#define ZDT_LIFT_SOFT_LIMIT_ENABLE  1
+#define ZDT_LIFT_SOFT_LIMIT_ENABLE  0
 #endif
 #ifndef ZDT_LIFT_SOFT_LIMIT_MIN_DEG
 #define ZDT_LIFT_SOFT_LIMIT_MIN_DEG (-120)

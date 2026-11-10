@@ -5,6 +5,13 @@ extern "C" uint32_t ZdtProto_DegToPulses(uint32_t abs_deg)
   return static_cast<uint32_t>((static_cast<uint64_t>(abs_deg) * ZDT_PULSE_PER_REV) / 360U);
 }
 
+extern "C" int32_t ZdtProto_UnitsToEmmDeg(int32_t units)
+{
+  const int64_t deg64 =
+      (static_cast<int64_t>(units) * 360LL) / static_cast<int64_t>(ZDT_POS_UNITS_PER_REV);
+  return static_cast<int32_t>(deg64);
+}
+
 extern "C" uint8_t ZdtProto_EncodeEnable(uint8_t *out, uint8_t capacity, uint8_t addr, uint8_t on, uint8_t snF)
 {
   if (out == nullptr || capacity < 6U) return 0U;

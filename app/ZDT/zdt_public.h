@@ -2,6 +2,7 @@
 #define __ZDT_PUBLIC_H
 
 #include "main.h"
+#include "zdt_protocol.h"
 #include <stdint.h>
 
 /* USART1 -> Emm V5 motor bus: encode, address slots, DMA TX/RX */
@@ -45,6 +46,12 @@ HAL_StatusTypeDef Zdt_StopAndWait(uint8_t addr, uint32_t timeout_ms);
 /* Debug: last USART1 IDLE frame as "aa bb cc" (empty string if none). */
 void Zdt_ClearLastRx(void);
 uint16_t Zdt_FormatLastRx(char *out, uint16_t capacity);
+
+/* TX EncodeRead + wait for USART1 IDLE RX (addr + cmd in frame[0..1]). */
+HAL_StatusTypeDef Zdt_QueryRead(uint8_t addr, uint8_t cmd, uint32_t timeout_ms);
+
+/* Parse Zdt_FormatLastRx source buffer after Zdt_QueryRead (0x36 only). */
+int Zdt_ParseLastRealtimePos(ZdtPosRead *out);
 
 /* Unified UART dispatch hooks (Instance == USART1) */
 void Zdt_UART_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size);

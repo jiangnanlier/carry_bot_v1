@@ -533,8 +533,9 @@ private:
 
     if (*p == '?' || to_upper(*p) == 'H')
     {
-      append_line("OK A-tier: M? ME0/1 MG[+|-]deg MA[+|-]deg MX MZ MS[n] ML MJ S? ... test test1m ver");
-      append_line("MA=abs goto via Emm0x36 read+delta MG; MZ=Emm zero; ML/MJ show drv_deg");
+      append_line("OK A-tier: M? ME MG MA MX MZ MR MS ML MJ ... test test1m ver");
+      append_line("MR=USART1 smoke: query 36/1F/3A dump hex on shell (lift M1R turn M2R)");
+      append_line("MA=abs goto via 0x36+delta; MZ=Emm zero; ML/MJ show drv_deg");
       append_line("addr 1=lift 2=turn 3-6=wheels *=bcast default=2");
       return;
     }
@@ -663,6 +664,60 @@ private:
                   hal_err(st), static_cast<unsigned>(addr),
                   static_cast<long>(target), static_cast<long>(current), cur_src,
                   static_cast<long>(delta), static_cast<long>(after), after_src);
+        break;
+      }
+      case 'R':
+      {
+        if (addr == ZDT_ADDR_BROADCAST)
+        {
+          append_line("ERR MR no broadcast");
+          return;
+        }
+        static const uint8_t kQueryCmds[] = {
+          ZDT_CMD_READ_POS, ZDT_CMD_READ_VER, ZDT_CMD_READ_FLG
+        };
+        char rxhex[72];
+        reply_fmt("OK MR start a=%u", static_cast<unsigned>(addr));
+        flush_reply();
+        for (uint8_t qi = 0U; qi < sizeof(kQueryCmds); ++qi)
+        {
+          const uint8_t qcmd = kQueryCmds[qi];
+          Zdt_ClearLastRx();
+          const HAL_StatusTypeDef st = Zdt_QueryRead(addr, qcmd, ZDT_ACK_TIMEOUT_MS);
+          (void)Zdt_FormatLastRx(rxhex, sizeof(rxhex));
+          const char *rxst = "FAIL";
+          if (st == HAL_OK) rxst = "OK";
+          else if (st == HAL_TIMEOUT) rxst = "TIMEOUT";
+          else if (st == HAL_BUSY) rxst = "BUSY";
+          if (qcmd == ZDT_CMD_READ_POS)
+          {
+            ZdtPosRead pos{};
+            if (st == HAL_OK && Zdt_ParseLastRealtimePos(&pos) != 0)
+            {
+              const int32_t emm_deg = ZdtProto_UnitsToEmmDeg(pos.units);
+              reply_fmt("MR a=%u cmd=%02X %s rx=%s units=%ld deg=%ld parse=OK",
+                        static_cast<unsigned>(addr),
+                        static_cast<unsigned>(qcmd), rxst, rxhex,
+                        static_cast<long>(pos.units),
+                        static_cast<long>(emm_deg));
+            }
+            else
+            {
+              reply_fmt("MR a=%u cmd=%02X %s rx=%s parse=FAIL",
+                        static_cast<unsigned>(addr),
+                        static_cast<unsigned>(qcmd), rxst, rxhex);
+            }
+          }
+          else
+          {
+            reply_fmt("MR a=%u cmd=%02X %s rx=%s parse=NA",
+                      static_cast<unsigned>(addr),
+                      static_cast<unsigned>(qcmd), rxst, rxhex);
+          }
+          flush_reply();
+          vTaskDelay(pdMS_TO_TICKS(BRIDGE_TEST_GAP_MS));
+        }
+        append_line("OK MR done");
         break;
       }
       case 'Z':

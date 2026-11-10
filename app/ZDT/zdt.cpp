@@ -129,8 +129,23 @@ int32_t units_to_logical_deg(uint8_t addr, int32_t units)
   return Zdt_ApplyDirDeg(addr, static_cast<int32_t>(deg64));
 }
 
+bool frame_matches_query(const ZdtFrame &frame)
+{
+  if (frame.len < 2U) return false;
+  if (frame.data[0] != wait_addr) return false;
+  if (frame.data[1] == wait_cmd) return true;
+  /* Emm err: addr 00 EE 6B — still count as response to our addr at [0]. */
+  if (frame.len >= 3U && frame.data[0] == wait_addr) return true;
+  return false;
+}
+
 void note_wait_from_frame(const ZdtFrame &frame, BaseType_t *woken)
 {
+  if (wait_kind == 3U)
+  {
+    if (frame_matches_query(frame)) give_wait_sem(woken);
+    return;
+  }
   if (wait_kind == 2U)
   {
     ZdtPosRead pos{};
@@ -275,21 +290,19 @@ extern "C" HAL_StatusTypeDef Zdt_WaitAck(uint8_t addr, uint8_t cmd, uint32_t tim
   return (last_ack_ok != 0U) ? HAL_OK : HAL_ERROR;
 }
 
-extern "C" HAL_StatusTypeDef Zdt_ReadRealtimePosDeg(uint8_t addr, int32_t *deg_out,
-                                                    uint32_t timeout_ms)
+extern "C" HAL_StatusTypeDef Zdt_QueryRead(uint8_t addr, uint8_t cmd, uint32_t timeout_ms)
 {
-  if (deg_out == nullptr || zdt_ack_sem == nullptr) return HAL_ERROR;
+  if (zdt_ack_sem == nullptr) return HAL_ERROR;
   if (addr == ZDT_ADDR_BROADCAST) return HAL_ERROR;
 
-  wait_kind = 2U;
+  wait_kind = 3U;
   wait_addr = addr;
-  wait_cmd = ZDT_CMD_READ_POS;
-  wait_read_units = 0;
+  wait_cmd = cmd;
   last_ack_ok = 0U;
   (void)xSemaphoreTake(zdt_ack_sem, 0);
 
   uint8_t f[3];
-  const uint8_t n = ZdtProto_EncodeRead(f, sizeof(f), addr, ZDT_CMD_READ_POS);
+  const uint8_t n = ZdtProto_EncodeRead(f, sizeof(f), addr, cmd);
   if (n == 0U)
   {
     wait_kind = 0U;
@@ -311,8 +324,27 @@ extern "C" HAL_StatusTypeDef Zdt_ReadRealtimePosDeg(uint8_t addr, int32_t *deg_o
   }
   wait_kind = 0U;
   wait_addr = 0xFFU;
-  if (last_ack_ok == 0U) return HAL_ERROR;
-  *deg_out = units_to_logical_deg(addr, wait_read_units);
+  return (last_ack_ok != 0U) ? HAL_OK : HAL_ERROR;
+}
+
+extern "C" int Zdt_ParseLastRealtimePos(ZdtPosRead *out)
+{
+  if (out == nullptr) return 0;
+  return ZdtProto_ParseRealtimePos(last_rx_copy, last_rx_len, out);
+}
+
+extern "C" HAL_StatusTypeDef Zdt_ReadRealtimePosDeg(uint8_t addr, int32_t *deg_out,
+                                                    uint32_t timeout_ms)
+{
+  if (deg_out == nullptr) return HAL_ERROR;
+  const HAL_StatusTypeDef st =
+      Zdt_QueryRead(addr, ZDT_CMD_READ_POS, timeout_ms);
+  if (st != HAL_OK) return st;
+  ZdtPosRead pos{};
+  if (!ZdtProto_ParseRealtimePos(last_rx_copy, last_rx_len, &pos) ||
+      pos.addr != addr)
+    return HAL_ERROR;
+  *deg_out = units_to_logical_deg(addr, pos.units);
   return HAL_OK;
 }
 

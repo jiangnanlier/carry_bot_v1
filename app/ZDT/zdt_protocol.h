@@ -13,9 +13,10 @@ extern "C" {
 #define ZDT_CMD_POS      0xFDU
 #define ZDT_CMD_STOP     0xFEU
 #define ZDT_CMD_ZERO     0x0AU
-#define ZDT_CMD_READ_POS 0x36U
-#define ZDT_CMD_READ_VEL 0x35U
-#define ZDT_CMD_READ_FLG 0x3AU
+#define ZDT_CMD_READ_VER   0x1FU
+#define ZDT_CMD_READ_POS   0x36U
+#define ZDT_CMD_READ_VEL   0x35U
+#define ZDT_CMD_READ_FLG   0x3AU
 
 #define ZDT_ACK_OK       0x02U
 #define ZDT_TAIL         0x6BU
@@ -55,6 +56,8 @@ uint8_t ZdtProto_EncodeRead(uint8_t *out, uint8_t capacity, uint8_t addr, uint8_
 int ZdtProto_FindAck(const uint8_t *data, uint16_t len, ZdtAck *ack);
 int ZdtProto_ParseRealtimePos(const uint8_t *data, uint16_t len, ZdtPosRead *out);
 uint32_t ZdtProto_DegToPulses(uint32_t abs_deg);
+/* Emm manual: angle_deg = units * 360 / 65536 (wire/encoder space, no dir map). */
+int32_t ZdtProto_UnitsToEmmDeg(int32_t units);
 
 #ifdef __cplusplus
 }

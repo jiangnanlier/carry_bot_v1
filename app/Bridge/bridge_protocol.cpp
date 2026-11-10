@@ -24,7 +24,8 @@ struct BridgeSlot
   uint8_t  dir;
   uint8_t  acc;
   uint16_t vel;
-  int32_t  last_deg;
+  int32_t  last_deg;  /* last MG relative command (deg) */
+  int32_t  abs_deg;   /* tracked logical absolute (MA/MG); init 0; reset on MZ */
 };
 
 char to_upper(char c)
@@ -156,6 +157,7 @@ private:
       slots_[i].acc = static_cast<uint8_t>(ZDT_DEFAULT_ACC);
       slots_[i].vel = static_cast<uint16_t>(ZDT_DEFAULT_VEL_RPM);
       slots_[i].last_deg = 0;
+      slots_[i].abs_deg = 0;
     }
   }
 
@@ -176,6 +178,7 @@ private:
         slots_[i].acc = static_cast<uint8_t>(ZDT_DEFAULT_ACC);
         slots_[i].vel = static_cast<uint16_t>(ZDT_DEFAULT_VEL_RPM);
         slots_[i].last_deg = 0;
+        slots_[i].abs_deg = 0;
         return &slots_[i];
       }
     }
@@ -491,7 +494,8 @@ private:
 
     if (*p == '?' || to_upper(*p) == 'H')
     {
-      append_line("OK A-tier: M? ME0/1 MG[+|-]deg MX MS[n] ML MJ S? ... test test1m ver");
+      append_line("OK A-tier: M? ME0/1 MG[+|-]deg MA[+|-]deg MX MZ MS[n] ML MJ S? ... test test1m ver");
+      append_line("MA=absolute goto (tracked; Emm POS is relative); MZ=Emm zero/home");
       append_line("addr 1=lift 2=turn 3-6=wheels *=bcast default=2");
       return;
     }
@@ -562,14 +566,66 @@ private:
         }
         const HAL_StatusTypeDef st = Zdt_GoDeg(addr, deg);
         BridgeSlot *s = slot_find(addr);
-        if (s != nullptr)
+        if (s != nullptr && st == HAL_OK)
         {
           s->last_deg = deg;
+          s->abs_deg += deg;
           if (deg > 0) s->dir = 1U;
           else if (deg < 0) s->dir = 0U;
         }
+        else if (s != nullptr)
+        {
+          s->last_deg = deg;
+        }
         reply_fmt("%s MG addr=%u deg=%ld", hal_err(st), static_cast<unsigned>(addr),
                   static_cast<long>(deg));
+        break;
+      }
+      case 'A':
+      {
+        if (addr == ZDT_ADDR_BROADCAST)
+        {
+          append_line("ERR MA no broadcast");
+          return;
+        }
+        int32_t target = 0;
+        if (!parse_i32(p, &target))
+        {
+          append_line("ERR MA needs abs deg e.g. M1A0 M2A+90");
+          return;
+        }
+        BridgeSlot *s = slot_find(addr);
+        if (s == nullptr)
+        {
+          append_line("ERR no slot");
+          return;
+        }
+        const int32_t delta = target - s->abs_deg;
+        const HAL_StatusTypeDef st = Zdt_GoDeg(addr, delta);
+        if (st == HAL_OK)
+        {
+          s->abs_deg = target;
+          s->last_deg = delta;
+          if (delta > 0) s->dir = 1U;
+          else if (delta < 0) s->dir = 0U;
+        }
+        reply_fmt("%s MA addr=%u tgt=%ld d=%ld abs=%ld",
+                  hal_err(st), static_cast<unsigned>(addr),
+                  static_cast<long>(target), static_cast<long>(delta),
+                  static_cast<long>(s->abs_deg));
+        break;
+      }
+      case 'Z':
+      {
+        if (addr == ZDT_ADDR_BROADCAST)
+        {
+          append_line("ERR MZ no broadcast");
+          return;
+        }
+        const HAL_StatusTypeDef st = Zdt_Zero(addr);
+        BridgeSlot *s = slot_find(addr);
+        if (s != nullptr && st == HAL_OK) s->abs_deg = 0;
+        reply_fmt("%s MZ addr=%u", hal_err(st), static_cast<unsigned>(addr));
         break;
       }
       case 'X':
@@ -607,13 +663,14 @@ private:
         for (uint8_t i = 0U; i < BRIDGE_SLOT_MAX; ++i)
         {
           if (!slots_[i].used) continue;
-          reply_fmt("SLOT %u addr=%u dir=%u vel=%u acc=%u last_deg=%ld",
+          reply_fmt("SLOT %u addr=%u dir=%u vel=%u acc=%u last_deg=%ld abs_deg=%ld",
                     static_cast<unsigned>(i),
                     static_cast<unsigned>(slots_[i].addr),
                     static_cast<unsigned>(slots_[i].dir),
                     static_cast<unsigned>(slots_[i].vel),
                     static_cast<unsigned>(slots_[i].acc),
-                    static_cast<long>(slots_[i].last_deg));
+                    static_cast<long>(slots_[i].last_deg),
+                    static_cast<long>(slots_[i].abs_deg));
         }
         reply_fmt("default=%u", static_cast<unsigned>(default_addr_));
         break;
@@ -631,16 +688,17 @@ private:
           append_line("ERR no slot");
           return;
         }
-        reply_fmt("OK MJ addr=%u dir=%u vel=%u acc=%u last_deg=%ld",
+        reply_fmt("OK MJ addr=%u dir=%u vel=%u acc=%u last_deg=%ld abs_deg=%ld",
                   static_cast<unsigned>(s->addr),
                   static_cast<unsigned>(s->dir),
                   static_cast<unsigned>(s->vel),
                   static_cast<unsigned>(s->acc),
-                  static_cast<long>(s->last_deg));
+                  static_cast<long>(s->last_deg),
+                  static_cast<long>(s->abs_deg));
         break;
       }
       case '?':
-        append_line("OK A-tier: M? ME0/1 MG[+|-]deg MX MS[n] ML MJ test");
+        append_line("OK A-tier: M? ME0/1 MG MA MZ MX MS[n] ML MJ test");
         break;
       default:
         append_line("ERR unknown M cmd, send M?");

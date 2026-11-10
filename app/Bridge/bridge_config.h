@@ -17,10 +17,6 @@
 #define BRIDGE_TEST_VEL_RPM       60U
 #define BRIDGE_TEST_DIR           1U
 #define BRIDGE_TEST_GAP_MS        20U
-/* MA: allow large 0xFD moves before 0x36 re-read for shell pos= line */
-#ifndef BRIDGE_MA_SETTLE_MS
-#define BRIDGE_MA_SETTLE_MS       150U
-#endif
 /* test streams debug lines via Link_Send; final OK/ERR stays in reply buf */
 
 /* test1m: forward ~1 m via position mode (dir map applies in Zdt_GoDeg).

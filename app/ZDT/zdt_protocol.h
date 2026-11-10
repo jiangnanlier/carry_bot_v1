@@ -55,6 +55,10 @@ uint8_t ZdtProto_EncodeZero(uint8_t *out, uint8_t capacity, uint8_t addr);
 uint8_t ZdtProto_EncodeRead(uint8_t *out, uint8_t capacity, uint8_t addr, uint8_t cmd);
 int ZdtProto_FindAck(const uint8_t *data, uint16_t len, ZdtAck *ack);
 int ZdtProto_ParseRealtimePos(const uint8_t *data, uint16_t len, ZdtPosRead *out);
+int ZdtProto_ParseStatusFlags(const uint8_t *data, uint16_t len, uint8_t *addr, uint8_t *flags);
+int ZdtProto_ParseRealtimeVel(const uint8_t *data, uint16_t len, int32_t *rpm);
+#define ZDT_ST_ENABLE           0x01U
+#define ZDT_ST_POS_REACHED      0x02U
 uint32_t ZdtProto_DegToPulses(uint32_t abs_deg);
 /* Emm manual: angle_deg = units * 360 / 65536 (wire/encoder space, no dir map). */
 int32_t ZdtProto_UnitsToEmmDeg(int32_t units);

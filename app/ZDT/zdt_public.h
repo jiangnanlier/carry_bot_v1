@@ -59,6 +59,28 @@ HAL_StatusTypeDef Zdt_QueryRead(uint8_t addr, uint8_t cmd, uint32_t timeout_ms);
 /* Parse Zdt_FormatLastRx source buffer after Zdt_QueryRead (0x36 only). */
 int Zdt_ParseLastRealtimePos(ZdtPosRead *out);
 
+/* Poll 0x3A到位 (and 0x35 RPM=0 fallback) until settled or timeout_ms. */
+HAL_StatusTypeDef Zdt_WaitMotionSettled(uint8_t addr, uint32_t timeout_ms);
+
+typedef struct
+{
+  int32_t           target_logical;
+  int32_t           start_logical;
+  int32_t           final_logical;
+  int32_t           err_units;
+  uint8_t           passes;
+  uint8_t           target_clamped;
+  HAL_StatusTypeDef motion_wait;
+  HAL_StatusTypeDef move_st;
+} ZdtAbsGotoResult;
+
+/* MA core: 0x36-driven passes; residual goal ZDT_MA_TOL_DEG (see zdt_config.h). */
+HAL_StatusTypeDef Zdt_AbsGotoLogical(uint8_t addr, int32_t target_logical,
+                                     ZdtAbsGotoResult *out);
+
+/* Soft-limit relative MG on limited axes (lift); returns allowed delta. */
+int32_t Zdt_ClampRelativeDeg(uint8_t addr, int32_t rel_deg);
+
 /* Unified UART dispatch hooks (Instance == USART1) */
 void Zdt_UART_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size);
 void Zdt_UART_ErrorCallback(UART_HandleTypeDef *huart);

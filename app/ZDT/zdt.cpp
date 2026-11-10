@@ -2,6 +2,7 @@
 #include "zdt_config.h"
 #include "zdt_protocol.h"
 #include "zdt_dir_map.h"
+#include "zdt_limits.h"
 #include "usart.h"
 #include "FreeRTOS.h"
 #include "queue.h"
@@ -390,18 +391,118 @@ extern "C" int Zdt_ParseLastRealtimePos(ZdtPosRead *out)
   return ZdtProto_ParseRealtimePos(last_rx_copy, last_rx_len, out);
 }
 
+static HAL_StatusTypeDef read_wire_pos(uint8_t addr, ZdtPosRead *pos, uint32_t query_tmo)
+{
+  if (pos == nullptr) return HAL_ERROR;
+  if (Zdt_QueryRead(addr, ZDT_CMD_READ_POS, query_tmo) != HAL_OK) return HAL_TIMEOUT;
+  if (!ZdtProto_ParseRealtimePos(last_rx_copy, last_rx_len, pos) || pos->addr != addr)
+    return HAL_ERROR;
+  return HAL_OK;
+}
+
 extern "C" HAL_StatusTypeDef Zdt_ReadRealtimePosDeg(uint8_t addr, int32_t *deg_out,
                                                     uint32_t timeout_ms)
 {
   if (deg_out == nullptr) return HAL_ERROR;
-  const HAL_StatusTypeDef st =
-      Zdt_QueryRead(addr, ZDT_CMD_READ_POS, timeout_ms);
-  if (st != HAL_OK) return st;
   ZdtPosRead pos{};
-  if (!ZdtProto_ParseRealtimePos(last_rx_copy, last_rx_len, &pos) ||
-      pos.addr != addr)
-    return HAL_ERROR;
+  const HAL_StatusTypeDef st = read_wire_pos(addr, &pos, timeout_ms);
+  if (st != HAL_OK) return st;
   *deg_out = units_to_logical_deg(addr, pos.units);
+  return HAL_OK;
+}
+
+extern "C" int32_t Zdt_ClampRelativeDeg(uint8_t addr, int32_t rel_deg)
+{
+  const ZdtSoftLimit lim = Zdt_SoftLimitForAddr(addr);
+  if (lim.enable == 0U) return rel_deg;
+  int32_t cur = 0;
+  if (Zdt_ReadRealtimePosDeg(addr, &cur, ZDT_ACK_TIMEOUT_MS) != HAL_OK) return rel_deg;
+  uint8_t clamped = 0U;
+  const int32_t end =
+      Zdt_ClampLogicalTarget(addr, cur + rel_deg, &clamped);
+  (void)clamped;
+  return end - cur;
+}
+
+extern "C" HAL_StatusTypeDef Zdt_WaitMotionSettled(uint8_t addr, uint32_t timeout_ms)
+{
+  const TickType_t deadline = xTaskGetTickCount() + pdMS_TO_TICKS(timeout_ms);
+  uint8_t stable = 0U;
+  while (xTaskGetTickCount() <= deadline)
+  {
+    bool settled = false;
+    if (Zdt_QueryRead(addr, ZDT_CMD_READ_FLG, ZDT_ACK_TIMEOUT_MS) == HAL_OK)
+    {
+      uint8_t flags = 0U;
+      if (ZdtProto_ParseStatusFlags(last_rx_copy, last_rx_len, nullptr, &flags) != 0 &&
+          (flags & ZDT_ST_POS_REACHED) != 0U)
+        settled = true;
+    }
+    if (!settled &&
+        Zdt_QueryRead(addr, ZDT_CMD_READ_VEL, ZDT_ACK_TIMEOUT_MS) == HAL_OK)
+    {
+      int32_t rpm = 0;
+      if (ZdtProto_ParseRealtimeVel(last_rx_copy, last_rx_len, &rpm) != 0 && rpm == 0)
+        settled = true;
+    }
+    if (settled)
+    {
+      stable++;
+      if (stable >= ZDT_MA_ARRIVE_STABLE_CNT) return HAL_OK;
+    }
+    else
+    {
+      stable = 0U;
+    }
+    vTaskDelay(pdMS_TO_TICKS(ZDT_MA_POLL_MS));
+  }
+  return HAL_TIMEOUT;
+}
+
+extern "C" HAL_StatusTypeDef Zdt_AbsGotoLogical(uint8_t addr, int32_t target_logical,
+                                                  ZdtAbsGotoResult *out)
+{
+  if (out == nullptr || addr == ZDT_ADDR_BROADCAST) return HAL_ERROR;
+  std::memset(out, 0, sizeof(*out));
+  out->target_logical = target_logical;
+  out->motion_wait = HAL_OK;
+  out->move_st = HAL_OK;
+
+  uint8_t clamped = 0U;
+  target_logical = Zdt_ClampLogicalTarget(addr, target_logical, &clamped);
+  out->target_logical = target_logical;
+  out->target_clamped = clamped;
+
+  const int32_t tgt_u = Zdt_LogicalDegToWireUnits(addr, target_logical);
+  ZdtPosRead pos{};
+  if (read_wire_pos(addr, &pos, ZDT_ACK_TIMEOUT_MS) != HAL_OK)
+    return HAL_TIMEOUT;
+  out->start_logical = units_to_logical_deg(addr, pos.units);
+
+  for (uint8_t pass = 0U; pass < ZDT_MA_MAX_PASSES; ++pass)
+  {
+    const int32_t err_u = tgt_u - pos.units;
+    const int32_t aerr = (err_u < 0) ? -err_u : err_u;
+    if (aerr <= ZDT_MA_TOL_UNITS) break;
+
+    out->passes = static_cast<uint8_t>(out->passes + 1U);
+    out->move_st = Zdt_GoPosUnits(addr, err_u);
+    if (out->move_st != HAL_OK) break;
+
+    const HAL_StatusTypeDef mw =
+        Zdt_WaitMotionSettled(addr, ZDT_MA_MOTION_WAIT_MS);
+    if (mw != HAL_OK) out->motion_wait = mw;
+
+    if (read_wire_pos(addr, &pos, ZDT_ACK_TIMEOUT_MS) != HAL_OK)
+    {
+      out->move_st = HAL_TIMEOUT;
+      break;
+    }
+  }
+
+  out->final_logical = units_to_logical_deg(addr, pos.units);
+  out->err_units = tgt_u - pos.units;
+  if (out->move_st != HAL_OK) return out->move_st;
   return HAL_OK;
 }
 
